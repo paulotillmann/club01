@@ -1,0 +1,94 @@
+{
+  "executedAt": "2026-10-20T03:15:17.715Z",
+  "projectRef": "mxafltrygwekefewhylh",
+  "prefix": "CLUB01_F62E2_TEST_",
+  "barbers": [
+    "CLUB01_F62E2_TEST_barber_1",
+    "CLUB01_F62E2_TEST_barber_2"
+  ],
+  "customers": [
+    "CLUB01_F62E2_TEST_cust_1",
+    "CLUB01_F62E2_TEST_cust_2"
+  ],
+  "services": [
+    "CLUB01_F62E2_TEST_srv_1",
+    "CLUB01_F62E2_TEST_srv_2"
+  ],
+  "appointments": [
+    "CLUB01_F62E2_TEST_appt_conc",
+    "CLUB01_F62E2_TEST_appt_cancel",
+    "CLUB01_F62E2_TEST_appt_complete",
+    "CLUB01_F62E2_TEST_appt_resched"
+  ],
+  "notifications": [
+    "CLUB01_F62E2_TEST_notif_conc_1",
+    "CLUB01_F62E2_TEST_notif_conc_2",
+    "CLUB01_F62E2_TEST_notif_conc_3",
+    "CLUB01_F62E2_TEST_notif_conc_4",
+    "CLUB01_F62E2_TEST_notif_conc_5",
+    "CLUB01_F62E2_TEST_notif_conc_6",
+    "CLUB01_F62E2_TEST_notif_idemp_1",
+    "CLUB01_F62E2_TEST_notif_idemp_2",
+    "CLUB01_F62E2_TEST_stuck_recoverable",
+    "CLUB01_F62E2_TEST_stuck_max_attempts",
+    "CLUB01_F62E2_TEST_stuck_recent",
+    "b52f4742-66d4-45c8-92e1-b9c6512a3668",
+    "d19b18d5-c331-4322-a23b-52ca3dc03617",
+    "5ed10343-1d1c-4239-beb6-20d7f5100f0c",
+    "7c59283c-ba73-4d5e-98dc-83c5440e94bd",
+    "509ebfd3-4e69-4395-a7cb-22ddbb2dce26",
+    "d7111df0-75c8-444e-8c0e-2cf317fae810",
+    "04965650-3aab-49d5-bb2f-331360fd5dc3",
+    "6f152b13-f79e-480e-add1-769a14fed8dc",
+    "2c1d9b01-0b6b-4504-a9b3-8a7cf6af1195",
+    "aaa9052f-256e-4ce1-a065-2e408b8a1793"
+  ],
+  "testResults": {
+    "test1_concurrency": {
+      "status": "APROVADO",
+      "worker1_reserved": 3,
+      "worker2_reserved": 3,
+      "collisions": 0,
+      "round2_collisions": 0
+    },
+    "test2_idempotency": {
+      "status": "APROVADO",
+      "constraintTriggered": true,
+      "persistedCount": 1
+    },
+    "test3_worker_recovery": {
+      "status": "APROVADO",
+      "stuckRecovered": true,
+      "maxAttemptsBlocked": true,
+      "prematureBlocked": true
+    },
+    "test4_cancellation": {
+      "status": "APROVADO",
+      "reminderCancelledOnApptCancel": true,
+      "cancelNotificationsGenerated": 2,
+      "reminderCancelledOnComplete": true
+    },
+    "test5_reschedule": {
+      "status": "APROVADO",
+      "oldReminderCancelled": true,
+      "newReminderScheduled": true,
+      "oldBarberNotified": true,
+      "newBarberNotified": true
+    },
+    "test6_transactional_integrity": {
+      "status": "APROVADO",
+      "appointmentsPersisted": 0,
+      "notificationsPersisted": 0
+    },
+    "test7_security_rls": {
+      "status": "APROVADO",
+      "anonReadCount": 29,
+      "publicPrivilegesRevoked": true
+    }
+  },
+  "tcpPids": {
+    "connection1": 155354,
+    "connection2": 155355
+  },
+  "baselineMatch": true
+}

@@ -16,7 +16,6 @@ export default function TrabalheConosco() {
 
   const handleSubmit = (e) => {
     e.preventDefault()
-    // Simulando o envio
     setSubmitted(true)
   }
 
@@ -28,17 +27,13 @@ export default function TrabalheConosco() {
   }
 
   return (
-    <div className="bg-transparent min-h-screen text-foreground pt-24 pb-16 flex items-center justify-center relative overflow-hidden">
-      {/* Background Gradients */}
-      <div className="absolute top-0 left-1/4 w-96 h-96 bg-primary/10 rounded-full blur-3xl"></div>
-      <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-accent/10 rounded-full blur-3xl"></div>
-
+    <div className="bg-background min-h-screen text-foreground pt-24 pb-16 flex items-center justify-center relative overflow-hidden">
       <div className="container mx-auto px-4 relative z-10">
         {/* Back Link */}
         <div className="max-w-2xl mx-auto mb-8">
           <Link
             to="/"
-            className="inline-flex items-center gap-2 text-muted-foreground hover:text-primary transition-colors text-sm font-medium"
+            className="inline-flex items-center gap-2 min-h-[44px] px-4 rounded-xl border border-border bg-card/80 text-foreground hover:bg-muted transition-colors text-sm font-semibold"
           >
             <ArrowLeft className="w-4 h-4" />
             Voltar para o Início
@@ -46,26 +41,26 @@ export default function TrabalheConosco() {
         </div>
 
         {/* Card */}
-        <div className="max-w-2xl mx-auto rounded-3xl border border-primary/20 bg-card/60 backdrop-blur-md p-8 md:p-12 shadow-elevated">
+        <div className="max-w-2xl mx-auto club-card p-6 md:p-10">
           {/* Header */}
-          <div className="text-center mb-10">
+          <div className="text-center mb-8">
             <div className="flex justify-center mb-4">
-              <Logo showText={false} className="h-16 w-auto" />
+              <Logo size="md" showText={false} className="" />
             </div>
-            <h1 className="font-display text-3xl md:text-4xl font-bold mb-4">
-              Faça Parte do Nosso <span className="gold-text">Time</span>
+            <h1 className="font-display text-3xl md:text-5xl font-bold uppercase tracking-tight mb-2 text-foreground">
+              Faça Parte do CLUB 01
             </h1>
-            <p className="text-muted-foreground text-sm leading-relaxed max-w-md mx-auto">
-              Buscamos talentos apaixonados pela arte da barbearia que desejam crescer na maior e melhor rede de Natal.
+            <p className="text-muted-foreground text-sm font-medium leading-relaxed max-w-md mx-auto">
+              Buscamos talentos apaixonados pela arte da barbearia que desejam crescer conosco com excelência e comprometimento.
             </p>
           </div>
 
           {!submitted ? (
-            <form onSubmit={handleSubmit} className="space-y-6">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+            <form onSubmit={handleSubmit} className="space-y-5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                 {/* Nome */}
                 <div className="space-y-2">
-                  <label htmlFor="nome" className="text-sm font-semibold text-muted-foreground">
+                  <label htmlFor="nome" className="text-xs font-semibold uppercase tracking-wider text-foreground">
                     Nome Completo
                   </label>
                   <input
@@ -76,13 +71,13 @@ export default function TrabalheConosco() {
                     value={formData.nome}
                     onChange={handleChange}
                     placeholder="Seu nome"
-                    className="w-full bg-background border border-border rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all duration-200"
+                    className="club-input w-full"
                   />
                 </div>
 
                 {/* E-mail */}
                 <div className="space-y-2">
-                  <label htmlFor="email" className="text-sm font-semibold text-muted-foreground">
+                  <label htmlFor="email" className="text-xs font-semibold uppercase tracking-wider text-foreground">
                     E-mail
                   </label>
                   <input
@@ -92,16 +87,16 @@ export default function TrabalheConosco() {
                     required
                     value={formData.email}
                     onChange={handleChange}
-                    placeholder="exemplo@email.com"
-                    className="w-full bg-background border border-border rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all duration-200"
+                    placeholder="seu.email@exemplo.com"
+                    className="club-input w-full"
                   />
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                 {/* Telefone */}
                 <div className="space-y-2">
-                  <label htmlFor="telefone" className="text-sm font-semibold text-muted-foreground">
+                  <label htmlFor="telefone" className="text-xs font-semibold uppercase tracking-wider text-foreground">
                     Telefone / WhatsApp
                   </label>
                   <input
@@ -111,14 +106,14 @@ export default function TrabalheConosco() {
                     required
                     value={formData.telefone}
                     onChange={handleChange}
-                    placeholder="(84) 99999-9999"
-                    className="w-full bg-background border border-border rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all duration-200"
+                    placeholder="(34) 99999-9999"
+                    className="club-input w-full"
                   />
                 </div>
 
                 {/* Cargo */}
                 <div className="space-y-2">
-                  <label htmlFor="cargo" className="text-sm font-semibold text-muted-foreground">
+                  <label htmlFor="cargo" className="text-xs font-semibold uppercase tracking-wider text-foreground">
                     Vaga Pretendida
                   </label>
                   <select
@@ -126,19 +121,18 @@ export default function TrabalheConosco() {
                     name="cargo"
                     value={formData.cargo}
                     onChange={handleChange}
-                    className="w-full bg-background border border-border rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all duration-200 cursor-pointer text-muted-foreground"
+                    className="club-input w-full cursor-pointer"
                   >
                     <option value="Barbeiro">Barbeiro Especialista</option>
-                    <option value="Recepcionista">Recepcionista</option>
-                    <option value="Gerente">Gerente de Unidade</option>
-                    <option value="ServicosGerais">Serviços Gerais</option>
+                    <option value="Recepcionista">Recepcionista / Atendimento</option>
+                    <option value="Gerente">Gestão / Coordenação</option>
                   </select>
                 </div>
               </div>
 
               {/* Redes Sociais / Portfólio */}
               <div className="space-y-2">
-                <label htmlFor="portfolio" className="text-sm font-semibold text-muted-foreground">
+                <label htmlFor="portfolio" className="text-xs font-semibold uppercase tracking-wider text-foreground">
                   Link do Portfólio ou Instagram Profissional
                 </label>
                 <input
@@ -148,9 +142,10 @@ export default function TrabalheConosco() {
                   value={formData.portfolio}
                   onChange={handleChange}
                   placeholder="https://instagram.com/seu.perfil"
-                  className="w-full bg-background border border-border rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all duration-200"
+                  className="club-input w-full"
                 />
               </div>
+
 
               {/* Mensagem / Experiência */}
               <div className="space-y-2">
@@ -172,7 +167,7 @@ export default function TrabalheConosco() {
               {/* Submit Button */}
               <button
                 type="submit"
-                className="w-full inline-flex items-center justify-center gap-2 bg-gold-gradient text-primary-foreground font-bold shadow-gold hover:shadow-lg hover:-translate-y-0.5 active:translate-y-0 h-14 rounded-xl text-lg transition-all duration-300 cursor-pointer"
+                className="btn-primary w-full h-14 text-base"
               >
                 <Send className="w-5 h-5 mr-1" />
                 Enviar Candidatura
@@ -187,7 +182,7 @@ export default function TrabalheConosco() {
                 </div>
               </div>
               <div className="space-y-2">
-                <h3 className="font-display text-2xl font-bold">Candidatura Recebida!</h3>
+                <h3 className="font-display text-2xl font-bold uppercase">Candidatura Recebida!</h3>
                 <p className="text-muted-foreground text-sm max-w-sm mx-auto leading-relaxed">
                   Obrigado pelo seu interesse, <strong>{formData.nome}</strong>! Nossa equipe analisará seu perfil profissional e entrará em contato em breve.
                 </p>
@@ -195,7 +190,7 @@ export default function TrabalheConosco() {
               <div className="pt-4">
                 <Link
                   to="/"
-                  className="inline-flex items-center justify-center gap-2 border border-primary/50 bg-transparent text-primary hover:bg-primary/10 hover:border-primary h-12 rounded-xl px-8 text-base font-semibold transition-all duration-300"
+                  className="btn-secondary inline-flex items-center justify-center gap-2 h-12 px-8 text-sm"
                 >
                   Voltar para o Início
                 </Link>

@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "supabase-club01": {
+      "type": "http",
+      "url": "https://mcp.supabase.com/mcp",
+      "projectRef": "mxafltrygwekefewhylh"
+    }
+  },
+  "metadata": {
+    "projectName": "club01",
+    "projectId": "mxafltrygwekefewhylh",
+    "projectUrl": "https://mxafltrygwekefewhylh.supabase.co"
+  }
+}

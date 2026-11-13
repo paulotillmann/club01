@@ -1,6 +1,16 @@
 import React, { useState, useEffect, useRef } from "react"
 import { useNavigate } from "react-router-dom"
-import { useAuth, API_URL } from "../context/AuthContext.jsx"
+import { useAuth } from "../context/AuthContext.jsx"
+import {
+  appointmentsApi,
+  servicesApi,
+  barbersApi,
+  customersApi,
+  productsApi,
+  salesApi,
+  caixaApi
+} from "../lib/api.js"
+import { formatPhoneNumber } from "../lib/phone.js"
 import {
   Calendar as CalendarIcon,
   Clock,
@@ -26,7 +36,7 @@ import SaleModal from "../components/SaleModal.jsx"
 import CaixaEntryModal from "../components/CaixaEntryModal.jsx"
 
 export default function AgendaGrid() {
-  const { user, token } = useAuth()
+  const { user } = useAuth()
   const navigate = useNavigate()
 
   const [appointments, setAppointments] = useState([])
@@ -175,37 +185,21 @@ export default function AgendaGrid() {
     setCancelSubmitting(true)
 
     try {
-      const response = await fetch(`${API_URL}/api/appointments/cancel-range`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          barber_id: cancelBarberId,
-          date: selectedDate,
-          start_time: cancelStartTime,
-          end_time: cancelEndTime,
-          reason: cancelReason.trim()
-        })
+      const data = await appointmentsApi.cancelRange({
+        barber_id: cancelBarberId,
+        date: selectedDate,
+        start_time: cancelStartTime,
+        end_time: cancelEndTime,
+        reason: cancelReason.trim()
       })
-
-      const data = await response.json()
-      if (!response.ok) {
-        throw new Error(data.error || "Erro ao efetuar bloqueio / cancelamento.")
-      }
 
       setSuccessMsg(`Bloqueio efetuado com sucesso para ${data.count} horário(s)!`)
       setTimeout(() => setSuccessMsg(""), 4000)
       setIsCancelRangeModalOpen(false)
 
       // Recarregar agendamentos
-      const appRes = await fetch(`${API_URL}/api/appointments`, {
-        headers: { Authorization: `Bearer ${token}` }
-      })
-      if (appRes.ok) {
-        setAppointments(await appRes.json())
-      }
+      const appts = await appointmentsApi.getAll()
+      setAppointments(appts || [])
     } catch (err) {
       setCancelError(err.message)
     } finally {
@@ -242,22 +236,19 @@ export default function AgendaGrid() {
 
     async function fetchData() {
       try {
-        const headers = { Authorization: `Bearer ${token}` }
-
-        const [apptRes, srvRes, barbRes, custRes, prodRes, salesRes, caixaRes] = await Promise.all([
-          fetch(`${API_URL}/api/appointments`, { headers }),
-          fetch(`${API_URL}/api/services`),
-          fetch(`${API_URL}/api/barbers`),
-          fetch(`${API_URL}/api/customers`, { headers }),
-          fetch(`${API_URL}/api/products`, { headers }),
-          fetch(`${API_URL}/api/sales/all`, { headers }),
-          fetch(`${API_URL}/api/caixa`, { headers })
+        const [appts, srvs, loadedBarbers, custs, prodsData, sales, cData] = await Promise.all([
+          appointmentsApi.getAll(),
+          servicesApi.getAll(),
+          barbersApi.getAll(),
+          customersApi.getAll(),
+          productsApi.getAll(),
+          salesApi.getAll(),
+          caixaApi.getAll()
         ])
 
-        if (apptRes.ok) setAppointments(await apptRes.json())
-        if (srvRes.ok) setServices(await srvRes.json())
-        if (barbRes.ok) {
-          const loadedBarbers = await barbRes.json()
+        setAppointments(appts || [])
+        setServices(srvs || [])
+        if (loadedBarbers) {
           setBarbers(loadedBarbers)
 
           // Selecionar por padrão o barbeiro do usuário logado se existir, ou o primeiro barbeiro
@@ -272,23 +263,17 @@ export default function AgendaGrid() {
             }
           }
         }
-        if (custRes.ok) setCustomers(await custRes.json())
-        if (prodRes.ok) {
-          const prodsData = await prodRes.json()
-          if (Array.isArray(prodsData)) setProductsList(prodsData)
-        }
-        if (salesRes.ok) setSalesList(await salesRes.json())
-        if (caixaRes.ok) {
-          const cData = await caixaRes.json()
-          setCaixaList(cData.transactions || cData || [])
-        }
+        setCustomers(custs || [])
+        if (Array.isArray(prodsData)) setProductsList(prodsData)
+        setSalesList(sales || [])
+        setCaixaList(cData?.transactions || cData || [])
       } catch (err) {
         console.error("Erro ao carregar dados da agenda grid:", err)
       }
     }
 
     fetchData()
-  }, [user, token, navigate])
+  }, [user, navigate])
 
   // Handlers para o Modal de Lançamento do Caixa
   const handleOpenCaixaModal = (appt) => {
@@ -326,22 +311,15 @@ export default function AgendaGrid() {
     setExistingSaleData(null)
     setIsSaleModalOpen(true)
     try {
-      const headers = { Authorization: `Bearer ${token}` }
-      const [pRes, sRes] = await Promise.all([
-        fetch(`${API_URL}/api/products`, { headers }),
-        fetch(`${API_URL}/api/sales/appointment/${appt.id}`, { headers })
+      const [prodsData, saleData] = await Promise.all([
+        productsApi.getAll(),
+        salesApi.getByAppointment(appt.id)
       ])
-      if (pRes.ok) {
-        const prodsData = await pRes.json()
-        if (Array.isArray(prodsData) && prodsData.length > 0) {
-          setProductsList(prodsData)
-        }
+      if (Array.isArray(prodsData) && prodsData.length > 0) {
+        setProductsList(prodsData)
       }
-      if (sRes.ok) {
-        const data = await sRes.json()
-        if (data && data.id) {
-          setExistingSaleData(data)
-        }
+      if (saleData && saleData.id) {
+        setExistingSaleData(saleData)
       }
     } catch (err) {
       console.error("Erro ao buscar venda do agendamento:", err)
@@ -349,72 +327,54 @@ export default function AgendaGrid() {
   }
 
   const handleSaveSale = async (salePayload) => {
-    const url = salePayload.id
-      ? `${API_URL}/api/sales/${salePayload.id}`
-      : `${API_URL}/api/sales`
-    const method = salePayload.id ? "PUT" : "POST"
-
-    const res = await fetch(url, {
-      method,
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`
-      },
-      body: JSON.stringify(salePayload)
-    })
-
-    const data = await res.json()
-    if (!res.ok) {
-      throw new Error(data.error || "Erro ao salvar a venda.")
+    if (salePayload.id) {
+      await salesApi.delete(salePayload.id).catch(() => { })
     }
 
+    await salesApi.createAtomic({
+      appointmentId: salePayload.appointment_id,
+      customerId: salePayload.customer_id,
+      paymentMethod: salePayload.payment_method,
+      items: salePayload.items,
+      registerInCaixa: salePayload.sync_caixa !== false
+    })
+
     // Recarregar lista de vendas e produtos
-    const [sRes, pRes] = await Promise.all([
-      fetch(`${API_URL}/api/sales/all`),
-      fetch(`${API_URL}/api/products`)
+    const [sales, prods] = await Promise.all([
+      salesApi.getAll(),
+      productsApi.getAll()
     ])
-    if (sRes.ok) setSalesList(await sRes.json())
-    if (pRes.ok) setProductsList(await pRes.json())
+    setSalesList(sales || [])
+    setProductsList(prods || [])
   }
 
   const handleDeleteSale = async (saleId) => {
-    const res = await fetch(`${API_URL}/api/sales/${saleId}`, {
-      method: "DELETE",
-      headers: { Authorization: `Bearer ${token}` }
-    })
-
-    if (!res.ok) {
-      const data = await res.json()
-      throw new Error(data.error || "Erro ao excluir venda.")
-    }
+    await salesApi.delete(saleId)
 
     // Recarregar lista de vendas e produtos
-    const [sRes, pRes] = await Promise.all([
-      fetch(`${API_URL}/api/sales/all`),
-      fetch(`${API_URL}/api/products`)
+    const [sales, prods] = await Promise.all([
+      salesApi.getAll(),
+      productsApi.getAll()
     ])
-    if (sRes.ok) setSalesList(await sRes.json())
-    if (pRes.ok) setProductsList(await pRes.json())
+    setSalesList(sales || [])
+    setProductsList(prods || [])
   }
 
   // Polling em tempo real
   useEffect(() => {
-    if (!user || !token || !isRealtimeEnabled) return
+    if (!user || !isRealtimeEnabled) return
 
     const interval = setInterval(async () => {
       try {
-        const headers = { Authorization: `Bearer ${token}` }
-        const apptRes = await fetch(`${API_URL}/api/appointments`, { headers })
-        if (apptRes.ok) {
-          setAppointments(await apptRes.json())
-        }
+        const appts = await appointmentsApi.getAll()
+        setAppointments(appts || [])
       } catch (err) {
         console.error("Erro no polling realtime da agenda grid:", err)
       }
     }, 5000)
 
     return () => clearInterval(interval)
-  }, [user, token, isRealtimeEnabled])
+  }, [user, isRealtimeEnabled])
 
   // Fechar dropdown de clientes ao clicar fora
   useEffect(() => {
@@ -426,16 +386,6 @@ export default function AgendaGrid() {
     document.addEventListener("mousedown", handleClickOutside)
     return () => document.removeEventListener("mousedown", handleClickOutside)
   }, [])
-
-  const formatPhoneNumber = (value) => {
-    if (!value) return value
-    const phoneNumber = value.replace(/[^\d]/g, "")
-    const len = phoneNumber.length
-    if (len < 3) return phoneNumber
-    if (len < 7) return `(${phoneNumber.slice(0, 2)}) ${phoneNumber.slice(2)}`
-    if (len < 11) return `(${phoneNumber.slice(0, 2)}) ${phoneNumber.slice(2, 6)}-${phoneNumber.slice(6)}`
-    return `(${phoneNumber.slice(0, 2)}) ${phoneNumber.slice(2, 7)}-${phoneNumber.slice(7, 11)}`
-  }
 
   const formatBirthDate = (dateStr) => {
     if (!dateStr) return ""
@@ -649,26 +599,15 @@ export default function AgendaGrid() {
     setSubmitLoading(true)
     setError("")
     try {
-      const response = await fetch(`${API_URL}/api/appointments/${selectedBloqueio.id}`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` }
-      })
-      const data = await response.json()
-      if (!response.ok) {
-        throw new Error(data.error || "Erro ao remover bloqueio de agenda.")
-      }
+      await appointmentsApi.removeBloqueio(selectedBloqueio)
 
       setSuccessMsg("Bloqueio de agenda removido com sucesso! Horários liberados.")
       setTimeout(() => setSuccessMsg(""), 4000)
       setIsBloqueioModalOpen(false)
       setSelectedBloqueio(null)
 
-      const appRes = await fetch(`${API_URL}/api/appointments`, {
-        headers: { Authorization: `Bearer ${token}` }
-      })
-      if (appRes.ok) {
-        setAppointments(await appRes.json())
-      }
+      const appts = await appointmentsApi.getAll()
+      setAppointments(appts || [])
     } catch (err) {
       setError(err.message)
     } finally {
@@ -749,29 +688,23 @@ export default function AgendaGrid() {
     const appointmentTime = `${selectedDate}T${selectedTime}`
 
     try {
-      const url = editingAppointmentId
-        ? `${API_URL}/api/appointments/${editingAppointmentId}`
-        : `${API_URL}/api/appointments`
-      const method = editingAppointmentId ? "PUT" : "POST"
+      const serviceIdsList = Array.isArray(selectedServices) ? selectedServices : [selectedServices].filter(Boolean)
 
-      const response = await fetch(url, {
-        method,
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          barber_id: selectedBarber,
-          service_id: selectedServices,
-          appointment_time: appointmentTime,
-          name: clientName,
-          phone: clientPhone
+      if (editingAppointmentId) {
+        await appointmentsApi.rescheduleOnline({
+          appointmentId: editingAppointmentId,
+          newAppointmentTime: appointmentTime,
+          newBarberId: selectedBarber,
+          serviceIds: serviceIdsList
         })
-      })
-
-      const data = await response.json()
-      if (!response.ok) {
-        throw new Error(data.error || "Erro ao salvar agendamento.")
+      } else {
+        await appointmentsApi.bookOnline({
+          name: clientName,
+          phone: clientPhone,
+          barberId: selectedBarber,
+          serviceIds: serviceIdsList,
+          appointmentTime
+        })
       }
 
       setSuccessMsg(editingAppointmentId ? "Agendamento atualizado com sucesso!" : "Agendamento realizado com sucesso!")
@@ -781,12 +714,8 @@ export default function AgendaGrid() {
       setEditingAppointmentId(null)
 
       // Atualizar lista
-      const appRes = await fetch(`${API_URL}/api/appointments`, {
-        headers: { Authorization: `Bearer ${token}` }
-      })
-      if (appRes.ok) {
-        setAppointments(await appRes.json())
-      }
+      const appts = await appointmentsApi.getAll()
+      setAppointments(appts || [])
     } catch (err) {
       setError(err.message || "Erro de conexão ao salvar agendamento.")
     } finally {
@@ -799,22 +728,15 @@ export default function AgendaGrid() {
     if (!editingAppointmentId) return
     setSubmitLoading(true)
     try {
-      const res = await fetch(`${API_URL}/api/appointments/${editingAppointmentId}/cancel`, {
-        method: "PUT",
-        headers: { Authorization: `Bearer ${token}` }
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || "Erro ao cancelar agendamento.")
+      await appointmentsApi.cancel(editingAppointmentId)
 
       setSuccessMsg("Agendamento cancelado com sucesso!")
       setTimeout(() => setSuccessMsg(""), 4000)
       setIsAppointmentModalOpen(false)
       setEditingAppointmentId(null)
 
-      const appRes = await fetch(`${API_URL}/api/appointments`, {
-        headers: { Authorization: `Bearer ${token}` }
-      })
-      if (appRes.ok) setAppointments(await appRes.json())
+      const appts = await appointmentsApi.getAll()
+      setAppointments(appts || [])
     } catch (err) {
       setError(err.message)
     } finally {
@@ -827,26 +749,15 @@ export default function AgendaGrid() {
     if (!editingAppointmentId) return
     setSubmitLoading(true)
     try {
-      const res = await fetch(`${API_URL}/api/appointments/${editingAppointmentId}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({ status: "confirmed" })
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || "Erro ao reativar agenda.")
+      await appointmentsApi.update(editingAppointmentId, { status: "confirmed" })
 
       setSuccessMsg("Cancelamento desfeito com sucesso!")
       setTimeout(() => setSuccessMsg(""), 4000)
       setIsAppointmentModalOpen(false)
       setEditingAppointmentId(null)
 
-      const appRes = await fetch(`${API_URL}/api/appointments`, {
-        headers: { Authorization: `Bearer ${token}` }
-      })
-      if (appRes.ok) setAppointments(await appRes.json())
+      const appts = await appointmentsApi.getAll()
+      setAppointments(appts || [])
     } catch (err) {
       setError(err.message)
     } finally {
@@ -867,24 +778,13 @@ export default function AgendaGrid() {
     )
 
     try {
-      const response = await fetch(`${API_URL}/api/appointments/${editingAppointmentId}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({ status: newStatus })
-      })
-
-      if (!response.ok) {
-        setAppointments((prev) =>
-          prev.map((a) => (a.id === editingAppointmentId ? { ...a, status: currentEditingAppt.status } : a))
-        )
-      } else {
-        setIsAppointmentModalOpen(false)
-        setEditingAppointmentId(null)
-      }
+      await appointmentsApi.update(editingAppointmentId, { status: newStatus })
+      setIsAppointmentModalOpen(false)
+      setEditingAppointmentId(null)
     } catch (err) {
+      setAppointments((prev) =>
+        prev.map((a) => (a.id === editingAppointmentId ? { ...a, status: currentEditingAppt.status } : a))
+      )
       console.error("Erro ao alterar status ausente:", err)
     }
   }
@@ -902,24 +802,16 @@ export default function AgendaGrid() {
     }
 
     try {
-      const res = await fetch(`${API_URL}/api/customers`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          name: newCustomerName.trim().toUpperCase(),
-          phone: newCustomerPhone.trim()
-        })
+      const newCust = await customersApi.create({
+        name: newCustomerName.trim().toUpperCase(),
+        phone: newCustomerPhone.trim()
       })
 
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || "Erro ao cadastrar cliente.")
-
-      setCustomers((prev) => [...prev, data.customer])
-      setClientName(data.customer.name)
-      setClientPhone(formatPhoneNumber(data.customer.phone || ""))
+      if (newCust) {
+        setCustomers((prev) => [...prev, newCust])
+        setClientName(newCust.name)
+        setClientPhone(formatPhoneNumber(newCust.phone || ""))
+      }
       setIsNewCustomerModalOpen(false)
       setNewCustomerName("")
       setNewCustomerPhone("")
@@ -962,11 +854,11 @@ export default function AgendaGrid() {
           </div>
 
           {/* Navegação de Datas */}
-          <div className="flex items-center gap-3 bg-background/50 p-2 rounded-2xl border border-border/60 shadow-xs">
+          <div className="flex items-center gap-3 bg-card p-2 rounded-2xl border border-border shadow-xs">
             <button
               type="button"
               onClick={() => handleDateChange(-1)}
-              className="p-2 bg-black/40 hover:bg-black border border-gold-subtle rounded-xl text-[#d4af37] transition-all cursor-pointer hover:scale-105"
+              className="p-2 bg-card hover:bg-muted border border-border rounded-xl text-foreground transition-all cursor-pointer hover:scale-105"
               title="Dia Anterior"
             >
               <ChevronLeft size={20} />
@@ -975,11 +867,10 @@ export default function AgendaGrid() {
             <button
               type="button"
               onClick={() => setSelectedDate(todayStr)}
-              className={`px-3 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider border transition-all cursor-pointer ${
-                selectedDate === todayStr
-                  ? "bg-gold-gradient text-black border-gold-subtle shadow-md"
-                  : "bg-black/30 text-muted-foreground border-border/40 hover:text-foreground"
-              }`}
+              className={`px-3 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider border transition-all cursor-pointer ${selectedDate === todayStr
+                  ? "bg-foreground text-background border-foreground shadow-sm"
+                  : "bg-card text-muted-foreground border-border hover:text-foreground"
+                }`}
             >
               Hoje
             </button>
@@ -989,7 +880,7 @@ export default function AgendaGrid() {
             <button
               type="button"
               onClick={() => handleDateChange(1)}
-              className="p-2 bg-black/40 hover:bg-black border border-gold-subtle rounded-xl text-[#d4af37] transition-all cursor-pointer hover:scale-105"
+              className="p-2 bg-card hover:bg-muted border border-border rounded-xl text-foreground transition-all cursor-pointer hover:scale-105"
               title="Próximo Dia"
             >
               <ChevronRight size={20} />
@@ -1006,7 +897,7 @@ export default function AgendaGrid() {
 
         {/* Seletor Rápido de Barbeiro no Mobile */}
         {isMobile && user?.role !== 'barber' && barbers.length > 1 && (
-          <div className="bg-card/45 backdrop-blur-md border border-border/80 rounded-2xl p-3 shadow-xs flex items-center gap-2 overflow-x-auto custom-scrollbar">
+          <div className="bg-card border border-border rounded-2xl p-3 shadow-xs flex items-center gap-2 overflow-x-auto custom-scrollbar">
             <span className="text-xs font-bold text-muted-foreground whitespace-nowrap">Profissional:</span>
             <div className="flex items-center gap-2">
               {barbers.map((b, idx) => {
@@ -1017,13 +908,12 @@ export default function AgendaGrid() {
                     key={b.id}
                     type="button"
                     onClick={() => setSelectedMobileBarberId(String(b.id))}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold whitespace-nowrap transition-all cursor-pointer ${
-                      isSel
-                        ? "bg-gold-gradient text-black border-gold-subtle shadow-md"
-                        : "bg-black/30 text-muted-foreground border-border/40 hover:text-foreground"
-                    }`}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold whitespace-nowrap transition-all cursor-pointer ${isSel
+                        ? "bg-foreground text-background border-foreground shadow-sm"
+                        : "bg-card text-muted-foreground border-border hover:text-foreground"
+                      }`}
                   >
-                    <img src={photo} alt={b.name} className="w-5 h-5 rounded-full object-cover border border-black/20" />
+                    <img src={photo} alt={b.name} className="w-5 h-5 rounded-full object-cover border border-border" />
                     <span>{b.name.split(" ")[0]}</span>
                   </button>
                 )
@@ -1073,7 +963,7 @@ export default function AgendaGrid() {
       {/* MODAL DE CANCELAR / BLOQUEAR INTERVALO DE HORÁRIOS */}
       {isCancelRangeModalOpen && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[70] p-4 animate-fade-in">
-          <div className="bg-[#1c1c20]/95 backdrop-blur-xl w-full max-w-md border border-rose-500/30 rounded-2xl p-6 md:p-8 shadow-2xl relative animate-scale-in">
+          <div className="bg-card/95 text-card-foreground backdrop-blur-xl w-full max-w-md border border-rose-500/30 rounded-2xl p-6 md:p-8 shadow-2xl relative animate-scale-in">
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-lg font-bold font-display text-rose-400 flex items-center gap-2">
                 <X size={20} /> Cancelar / Bloquear Horários
@@ -1189,7 +1079,7 @@ export default function AgendaGrid() {
 
         return (
           <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[70] p-4 animate-fade-in">
-            <div className="bg-[#1c1c20]/95 backdrop-blur-xl w-full max-w-md border border-rose-500/40 rounded-2xl p-6 md:p-8 shadow-2xl relative animate-scale-in">
+            <div className="bg-card/95 text-card-foreground backdrop-blur-xl w-full max-w-md border border-rose-500/40 rounded-2xl p-6 md:p-8 shadow-2xl relative animate-scale-in">
               <div className="flex items-center justify-between mb-4 border-b border-border/40 pb-4">
                 <h3 className="text-lg font-bold font-display text-rose-400 flex items-center gap-2">
                   <AlertTriangle size={22} className="text-rose-400 shrink-0" />
@@ -1280,15 +1170,23 @@ export default function AgendaGrid() {
       {/* MODAL DE CRIAÇÃO / EDIÇÃO DE AGENDAMENTO (MODELO ORIGINAL IGUAL À AGENDA) */}
       {isAppointmentModalOpen && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
-          <div className="bg-[#1c1c20]/95 backdrop-blur-xl w-full max-w-3xl md:max-w-4xl border border-primary/30 rounded-2xl p-6 md:p-8 shadow-2xl relative animate-scale-in max-h-[90vh] overflow-y-auto">
-            <h3 className="text-xl font-bold font-display mb-6 text-primary flex items-center gap-2">
-              {editingAppointmentId ? <Edit3 size={20} /> : <Plus size={20} />}
-              {editingAppointmentId ? "Editar Agendamento" : "Novo Agendamento"}
-            </h3>
+          <div className="bg-card/95 text-card-foreground backdrop-blur-xl w-full max-w-3xl md:max-w-4xl border border-primary/30 rounded-2xl p-6 md:p-8 shadow-2xl relative animate-scale-in max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between gap-4 mb-5">
+              <h3 className="text-xl font-bold font-display text-primary flex items-center gap-2">
+                {editingAppointmentId ? <Edit3 size={20} /> : <Plus size={20} />}
+                {editingAppointmentId ? "Editar Agendamento" : "Novo Agendamento"}
+              </h3>
 
-            <p className="text-sm text-muted-foreground mb-6">
-              Para o dia <span className="font-bold text-foreground font-mono">{selectedDate ? formatBirthDate(selectedDate) : ""}</span>
-            </p>
+              {selectedDate && (
+                <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-primary/10 border border-primary/30 text-primary shrink-0">
+                  <CalendarIcon size={15} className="shrink-0" />
+                  <span className="text-xs font-medium text-muted-foreground hidden sm:inline">Para o dia</span>
+                  <span className="font-bold text-sm font-mono tracking-wide text-primary">
+                    {formatBirthDate(selectedDate)}
+                  </span>
+                </div>
+              )}
+            </div>
 
             <form onSubmit={handleSaveAppointment} className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1321,9 +1219,9 @@ export default function AgendaGrid() {
                         }
                       }}
                       placeholder="Digite o nome para buscar"
-                      className="w-full bg-background border border-border focus:border-primary rounded-xl py-3 pl-9 pr-4 text-sm text-foreground focus:outline-none transition-all"
+                      className="w-full bg-background border border-border focus:border-primary rounded-xl py-3 pl-10 pr-4 text-sm text-foreground focus:outline-none transition-all"
                     />
-                    <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/60" />
+                    <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/60 pointer-events-none" />
                   </div>
 
                   {/* Dropdown Autocomplete de Clientes */}
@@ -1401,11 +1299,10 @@ export default function AgendaGrid() {
                             setSelectedTime("")
                           }
                         }}
-                        className={`flex items-center gap-2.5 p-2 rounded-xl border text-left transition-all cursor-pointer ${
-                          isSelected
+                        className={`flex items-center gap-2.5 p-2 rounded-xl border text-left transition-all cursor-pointer ${isSelected
                             ? "border-primary bg-primary/10 text-primary font-medium"
                             : "border-border/60 bg-background/30 text-muted-foreground hover:border-border"
-                        }`}
+                          }`}
                       >
                         <div className="w-7 h-7 rounded-full overflow-hidden border border-border/80 shrink-0 bg-background">
                           <img src={barberPhoto} alt={barb.name} className="w-full h-full object-cover" />
@@ -1417,43 +1314,94 @@ export default function AgendaGrid() {
                 </div>
               </div>
 
-              {/* Selecionar Serviços (Múltiplos) */}
-              <div className="space-y-2">
-                <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block">Serviços Desejados *</label>
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5 max-h-56 overflow-y-auto p-1.5 bg-background/25 border border-border/40 rounded-xl">
-                  {services.map((srv) => {
-                    const isSelected = selectedServices.includes(srv.id)
-                    return (
-                      <button
-                        type="button"
-                        key={srv.id}
-                        onClick={() => {
-                          if (isSelected) {
-                            setSelectedServices((prev) => prev.filter((id) => id !== srv.id))
-                          } else {
-                            setSelectedServices((prev) => [...prev, srv.id])
-                          }
-                        }}
-                        className={`flex items-center justify-between p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
-                          isSelected
-                            ? "border-primary bg-primary/10 text-primary"
-                            : "border-border/60 bg-background/30 text-muted-foreground hover:border-border"
-                        }`}
-                      >
-                        <div className="flex items-center gap-2 min-w-0">
-                          <div
-                            className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-all ${
-                              isSelected ? "border-primary bg-primary text-background" : "border-muted-foreground/35"
+              {/* Selecionar Serviços e Horário lado a lado em duas colunas */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+                {/* Selecionar Serviços (Múltiplos) */}
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block">Serviços Desejados *</label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 h-44 overflow-y-auto content-start p-1.5 bg-background/25 border border-border/40 rounded-xl">
+                    {services.map((srv) => {
+                      const isSelected = selectedServices.includes(srv.id)
+                      return (
+                        <button
+                          type="button"
+                          key={srv.id}
+                          onClick={() => {
+                            if (isSelected) {
+                              setSelectedServices((prev) => prev.filter((id) => id !== srv.id))
+                            } else {
+                              setSelectedServices((prev) => [...prev, srv.id])
+                            }
+                          }}
+                          className={`flex items-center justify-between p-2.5 rounded-xl border text-left transition-all cursor-pointer ${isSelected
+                              ? "border-primary bg-primary/10 text-primary"
+                              : "border-border/60 bg-background/30 text-muted-foreground hover:border-border"
                             }`}
-                          >
-                            {isSelected && <Check size={12} strokeWidth={3} />}
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <div
+                              className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-all ${isSelected ? "border-primary bg-primary text-background" : "border-muted-foreground/35"
+                                }`}
+                            >
+                              {isSelected && <Check size={12} strokeWidth={3} />}
+                            </div>
+                            <span className="text-xs truncate font-medium">{srv.name}</span>
                           </div>
-                          <span className="text-xs truncate font-medium">{srv.name}</span>
-                        </div>
-                        <span className="text-[10px] font-mono pl-2 shrink-0 text-muted-foreground">R$ {srv.price.toFixed(0)}</span>
-                      </button>
-                    )
-                  })}
+                          <span className="text-[10px] font-mono pl-2 shrink-0 text-muted-foreground">R$ {srv.price.toFixed(0)}</span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                {/* Selecionar Horário */}
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block">Horário Disponível *</label>
+                  {!selectedDate ? (
+                    <div className="h-44 flex items-center justify-center p-3 bg-background/25 border border-border/40 rounded-xl">
+                      <p className="text-xs text-muted-foreground">Selecione um dia primeiro.</p>
+                    </div>
+                  ) : getTimeSlots(selectedDate).length === 0 ? (
+                    <div className="h-44 flex items-center justify-center p-3 bg-destructive/5 border border-destructive/20 rounded-xl">
+                      <p className="text-xs text-destructive font-bold text-center">
+                        Barbearia fechada neste dia (Domingo).
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-4 sm:grid-cols-5 gap-2 h-44 overflow-y-auto content-start p-1.5 bg-background/25 border border-border/40 rounded-xl">
+                      {getTimeSlots(selectedDate).map((time) => {
+                        const isPast = isTimeSlotPast(selectedDate, time)
+                        const isBooked = isTimeSlotBooked(selectedDate, time)
+                        const isDisabled = isPast || isBooked
+                        const isSelected = selectedTime === time
+                        return (
+                          <button
+                            key={time}
+                            type="button"
+                            disabled={isDisabled}
+                            onClick={() => setSelectedTime(time)}
+                            className={`py-2 text-xs font-bold rounded-xl border transition-all text-center ${isSelected
+                                ? "bg-foreground border-foreground text-background shadow-sm scale-102 cursor-pointer"
+                                : isBooked
+                                  ? "bg-destructive/10 border-destructive/20 text-destructive/60 line-through cursor-not-allowed"
+                                  : isPast
+                                    ? "bg-background/20 border-border/10 text-muted-foreground/30 cursor-not-allowed"
+                                    : "bg-background border-border text-foreground hover:border-foreground/50 cursor-pointer"
+                              }`}
+                            title={
+                              isBooked
+                                ? "Horário já agendado para este profissional"
+                                : isPast
+                                  ? "Horário já passou"
+                                  : `Selecionar ${time}`
+                            }
+                          >
+                            {time}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -1476,53 +1424,6 @@ export default function AgendaGrid() {
                   </div>
                 </div>
               )}
-
-              {/* Selecionar Horário */}
-              <div className="space-y-2">
-                <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block">Horário Disponível *</label>
-                {!selectedDate ? (
-                  <p className="text-xs text-muted-foreground">Selecione um dia primeiro.</p>
-                ) : getTimeSlots(selectedDate).length === 0 ? (
-                  <p className="text-xs text-destructive font-bold bg-destructive/5 p-3 rounded-lg border border-destructive/20 text-center">
-                    Barbearia fechada neste dia (Domingo).
-                  </p>
-                ) : (
-                  <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-2 max-h-40 overflow-y-auto p-1.5 bg-background/25 border border-border/40 rounded-xl">
-                    {getTimeSlots(selectedDate).map((time) => {
-                      const isPast = isTimeSlotPast(selectedDate, time)
-                      const isBooked = isTimeSlotBooked(selectedDate, time)
-                      const isDisabled = isPast || isBooked
-                      const isSelected = selectedTime === time
-                      return (
-                        <button
-                          key={time}
-                          type="button"
-                          disabled={isDisabled}
-                          onClick={() => setSelectedTime(time)}
-                          className={`py-2 text-xs font-bold rounded-xl border transition-all text-center ${
-                            isSelected
-                              ? "bg-primary border-primary text-background shadow-gold scale-102 cursor-pointer"
-                              : isBooked
-                              ? "bg-destructive/10 border-destructive/20 text-destructive/60 line-through cursor-not-allowed"
-                              : isPast
-                              ? "bg-background/20 border-border/10 text-muted-foreground/30 cursor-not-allowed"
-                              : "bg-background border-border text-foreground hover:border-primary/50 cursor-pointer"
-                          }`}
-                          title={
-                            isBooked
-                              ? "Horário já agendado para este profissional"
-                              : isPast
-                              ? "Horário já passou"
-                              : `Selecionar ${time}`
-                          }
-                        >
-                          {time}
-                        </button>
-                      )
-                    })}
-                  </div>
-                )}
-              </div>
 
               {/* Mensagens de Aviso / Erro / Sucesso Posicionadas Abaixo do Seletor de Horários */}
               {error && (
@@ -1552,11 +1453,10 @@ export default function AgendaGrid() {
                           type="button"
                           onClick={handleToggleAbsentModal}
                           disabled={submitLoading}
-                          className={`py-3 px-4 text-xs uppercase tracking-wider font-bold rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 border ${
-                            isCurrentApptAbsent
+                          className={`py-3 px-4 text-xs uppercase tracking-wider font-bold rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 border ${isCurrentApptAbsent
                               ? "bg-amber-500/20 border-amber-500/50 text-amber-400 hover:bg-amber-500/30"
                               : "bg-amber-500/10 border-amber-500/30 text-amber-400 hover:bg-amber-500/20"
-                          }`}
+                            }`}
                           title={isCurrentApptAbsent ? "Remover status Ausente" : "Marcar como Ausente"}
                         >
                           <UserX size={14} />
@@ -1603,10 +1503,10 @@ export default function AgendaGrid() {
                 <button
                   type="submit"
                   disabled={submitLoading}
-                  className="flex-1 py-3 bg-gold-gradient text-primary-foreground text-xs uppercase tracking-wider font-bold rounded-xl shadow-gold hover:shadow-gold-md transition-all cursor-pointer disabled:opacity-50"
+                  className="btn-primary flex-1 py-3 cursor-pointer disabled:opacity-50"
                 >
                   {submitLoading ? (
-                    <div className="w-5 h-5 border-2 border-primary-foreground border-t-transparent rounded-full animate-spin mx-auto"></div>
+                    <div className="w-5 h-5 border-2 border-background border-t-transparent rounded-full animate-spin mx-auto"></div>
                   ) : editingAppointmentId ? (
                     "SALVAR ALTERAÇÕES"
                   ) : (
@@ -1622,9 +1522,9 @@ export default function AgendaGrid() {
       {/* Sub-modal: Novo Cliente Rápido */}
       {isNewCustomerModalOpen && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[60] p-4 animate-fade-in">
-          <div className="bg-[#1c1c20]/95 backdrop-blur-xl w-full max-w-md border border-primary/30 rounded-2xl p-6 md:p-8 shadow-2xl relative animate-scale-in">
+          <div className="bg-card w-full max-w-md border border-border rounded-2xl p-6 md:p-8 shadow-2xl relative animate-scale-in">
             <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-bold font-display text-primary flex items-center gap-2">
+              <h3 className="text-lg font-bold font-display text-foreground flex items-center gap-2">
                 <UserPlus size={20} /> Cadastrar Novo Cliente
               </h3>
               <button
@@ -1652,7 +1552,7 @@ export default function AgendaGrid() {
                   value={newCustomerName}
                   onChange={(e) => setNewCustomerName(e.target.value)}
                   placeholder="Ex: João da Silva"
-                  className="w-full bg-background border border-border focus:border-primary rounded-xl py-2.5 px-3 text-xs text-foreground focus:outline-none transition-all"
+                  className="w-full bg-background border border-border focus:border-foreground rounded-xl py-2.5 px-3 text-xs text-foreground focus:outline-none transition-all"
                 />
               </div>
 
@@ -1664,7 +1564,7 @@ export default function AgendaGrid() {
                   value={newCustomerPhone}
                   onChange={(e) => setNewCustomerPhone(formatPhoneNumber(e.target.value))}
                   placeholder="Ex: (34) 99999-8888"
-                  className="w-full bg-background border border-border focus:border-primary rounded-xl py-2.5 px-3 text-xs text-foreground focus:outline-none transition-all"
+                  className="w-full bg-background border border-border focus:border-foreground rounded-xl py-2.5 px-3 text-xs text-foreground focus:outline-none transition-all"
                 />
               </div>
 
@@ -1679,10 +1579,10 @@ export default function AgendaGrid() {
                 <button
                   type="submit"
                   disabled={newCustomerSubmitting}
-                  className="flex-1 py-2.5 bg-gold-gradient text-primary-foreground text-xs uppercase tracking-wider font-bold rounded-xl shadow-gold hover:shadow-gold-md transition-all cursor-pointer disabled:opacity-50"
+                  className="btn-primary flex-1 py-2.5 cursor-pointer disabled:opacity-50"
                 >
                   {newCustomerSubmitting ? (
-                    <div className="w-4 h-4 border-2 border-primary-foreground border-t-transparent rounded-full animate-spin mx-auto"></div>
+                    <div className="w-4 h-4 border-2 border-background border-t-transparent rounded-full animate-spin mx-auto"></div>
                   ) : (
                     "Salvar e Selecionar"
                   )}
@@ -1716,7 +1616,6 @@ export default function AgendaGrid() {
           setSelectedCaixaAppt(null)
         }}
         appointment={selectedCaixaAppt}
-        token={token}
         onSaveSuccess={handleCaixaSaveSuccess}
       />
     </div>

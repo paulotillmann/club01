@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
-import { useAuth, API_URL } from "../context/AuthContext.jsx"
+import { useAuth } from "../context/AuthContext.jsx"
+import { customersApi, appointmentsApi } from "../lib/api.js"
 import { Users, Plus, Search, AlertTriangle, CheckCircle2, User, Pencil, Trash2, Sparkles, Upload, History } from "lucide-react"
 import Sidebar from "../components/Sidebar.jsx"
 import CustomerHistoryModal from "../components/CustomerHistoryModal.jsx"
@@ -39,23 +40,15 @@ export default function Clientes() {
       return
     }
 
-    if (user.role === "admin" || user.role === "barber") {
+    if (user.role === "admin" || user.role === "barber" || user.role === "secretario") {
       async function loadCustomers() {
         setCustomersLoading(true)
         setCustomerError("")
         try {
-          const response = await fetch(`${API_URL}/api/customers`, {
-            headers: { Authorization: `Bearer ${token}` }
-          })
-          if (response.ok) {
-            const data = await response.json()
-            setCustomerList(data)
-          } else {
-            const data = await response.json()
-            setCustomerError(data.error || "Erro ao carregar lista de clientes.")
-          }
-        } catch {
-          setCustomerError("Erro de conexão ao carregar clientes.")
+          const data = await customersApi.getAll()
+          setCustomerList(data)
+        } catch (err) {
+          setCustomerError(err.message || "Erro de conexão ao carregar clientes.")
         } finally {
           setCustomersLoading(false)
         }
@@ -64,13 +57,8 @@ export default function Clientes() {
     } else {
       async function loadAppts() {
         try {
-          const response = await fetch(`${API_URL}/api/appointments`, {
-            headers: { Authorization: `Bearer ${token}` }
-          })
-          if (response.ok) {
-            const data = await response.json()
-            setAppointments(data)
-          }
+          const data = await appointmentsApi.getAll()
+          setAppointments(data)
         } catch (err) {
           console.error("Erro ao carregar agendamentos:", err)
         }
@@ -217,35 +205,19 @@ export default function Clientes() {
     }
 
     try {
-      const url = editingCustomerId 
-        ? `${API_URL}/api/customers/${editingCustomerId}` 
-        : `${API_URL}/api/customers`
-      const method = editingCustomerId ? "PUT" : "POST"
-
-      const res = await fetch(url, {
-        method,
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify(payload)
-      })
-
-      const data = await res.json()
-      if (!res.ok) {
-        throw new Error(data.error || "Erro ao salvar cliente.")
+      let savedCust
+      if (editingCustomerId) {
+        savedCust = await customersApi.update(editingCustomerId, payload)
+        setCustomerList(prev => prev.map(c => c.id === editingCustomerId ? savedCust : c))
+      } else {
+        savedCust = await customersApi.create(payload)
+        setCustomerList(prev => [...prev, savedCust])
       }
 
       setCustomerSuccess(editingCustomerId ? "Cliente atualizado com sucesso!" : "Cliente cadastrado com sucesso!")
       setTimeout(() => {
         setCustomerSuccess("")
       }, 5000)
-      
-      if (editingCustomerId) {
-        setCustomerList(prev => prev.map(c => c.id === editingCustomerId ? data.customer : c))
-      } else {
-        setCustomerList(prev => [...prev, data.customer])
-      }
 
       setIsCustomerModalOpen(false)
       resetCustomerForm()
@@ -269,15 +241,7 @@ export default function Clientes() {
     setCustomerSuccess("")
 
     try {
-      const res = await fetch(`${API_URL}/api/customers/${id}`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` }
-      })
-
-      if (!res.ok) {
-        const data = await res.json()
-        throw new Error(data.error || "Erro ao excluir cliente.")
-      }
+      await customersApi.delete(id)
 
       setCustomerSuccess("Cliente excluído com sucesso!")
       setTimeout(() => {
@@ -304,7 +268,7 @@ export default function Clientes() {
 
       <div className="w-full relative z-10 animate-fade-in">
         <div className="space-y-6 mt-[40px]">
-          {(user.role === "admin" || user.role === "barber") ? (
+          {(user.role === "admin" || user.role === "barber" || user.role === "secretario") ? (
             <div className="bg-card/40 backdrop-blur-sm border border-border/80 rounded-2xl p-6 md:p-8 shadow-elevated relative overflow-hidden">
               
               <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6 border-b border-border/80 pb-6">
@@ -322,7 +286,7 @@ export default function Clientes() {
                     resetCustomerForm()
                     setIsCustomerModalOpen(true)
                   }}
-                  className="inline-flex items-center gap-2 bg-gold-gradient text-primary-foreground font-bold h-11 px-5 rounded-xl text-xs uppercase tracking-wider shadow-gold hover:shadow-gold-lg hover:-translate-y-0.5 transition-all duration-300 cursor-pointer"
+                  className="btn-primary inline-flex items-center gap-2 h-11 px-5 rounded-xl text-xs uppercase tracking-wider cursor-pointer"
                 >
                   <Plus size={16} /> Novo Cliente
                 </button>
@@ -330,13 +294,13 @@ export default function Clientes() {
 
               {/* Filtro/Pesquisa */}
               <div className="relative mb-6">
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4" />
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4 pointer-events-none" />
                 <input
                   type="text"
                   value={customerFilter}
                   onChange={(e) => setCustomerFilter(e.target.value)}
                   placeholder="Buscar cliente por nome ou celular..."
-                  className="w-full bg-background/50 border border-border focus:border-primary focus:ring-1 focus:ring-primary rounded-xl py-3 pl-11 pr-4 text-sm text-foreground placeholder-muted-foreground focus:outline-none transition-all duration-300"
+                  className="w-full bg-background/50 border border-border focus:border-primary focus:ring-1 focus:ring-primary rounded-xl py-3 pl-12 pr-4 text-sm text-foreground placeholder-muted-foreground focus:outline-none transition-all duration-300"
                 />
               </div>
 
@@ -355,9 +319,23 @@ export default function Clientes() {
               )}
 
               {customersLoading ? (
-                <div className="flex flex-col items-center justify-center py-16 gap-3">
-                  <div className="w-8 h-8 border-3 border-primary border-t-transparent rounded-full animate-spin"></div>
-                  <span className="text-xs text-muted-foreground">Carregando fichas de clientes...</span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-5">
+                  {[1, 2, 3, 4, 5].map((n) => (
+                    <div key={n} className="bg-muted/30 border border-border/50 rounded-2xl p-5 h-56 animate-pulse flex flex-col justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="w-12 h-12 rounded-full bg-muted shrink-0" />
+                        <div className="space-y-2 flex-1">
+                          <div className="h-4 bg-muted rounded w-3/4" />
+                          <div className="h-3 bg-muted rounded w-1/2" />
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <div className="h-3 bg-muted rounded w-full" />
+                        <div className="h-3 bg-muted rounded w-2/3" />
+                      </div>
+                      <div className="h-8 bg-muted rounded-xl w-full" />
+                    </div>
+                  ))}
                 </div>
               ) : (
                 <>
@@ -382,7 +360,7 @@ export default function Clientes() {
                             <div className="space-y-4">
                               <div className="flex items-start justify-between gap-3">
                                 <div className="flex items-center gap-3.5 min-w-0">
-                                  <div className="w-14 h-14 rounded-full overflow-hidden border border-gold-subtle shadow-sm bg-background/50 flex items-center justify-center shrink-0">
+                                  <div className="w-14 h-14 rounded-full overflow-hidden border border-border shadow-sm bg-background/50 flex items-center justify-center shrink-0">
                                     {c.photo ? (
                                       <img 
                                         src={c.photo} 
@@ -471,20 +449,20 @@ export default function Clientes() {
           ) : (
             <div className="bg-card/45 backdrop-blur-sm border border-border/80 rounded-2xl p-6 md:p-8 shadow-elevated relative overflow-hidden">
               <h2 className="text-xl font-bold font-display mb-4 text-primary flex items-center gap-2">
-                <Sparkles size={20} className="text-primary fill-primary/10 animate-pulse" /> Programa de Fidelidade Do Vale
+                <Sparkles size={20} className="text-foreground fill-foreground/10" /> Programa de Fidelidade CLUB 01
               </h2>
               <p className="text-sm text-muted-foreground mb-6 leading-relaxed">
-                Bem-vindo ao nosso clube de vantagens! A cada atendimento finalizado na Barbearia Do Vale, você acumula pontos para trocar por serviços e produtos exclusivos.
+                Bem-vindo ao nosso clube de vantagens! A cada atendimento finalizado no CLUB 01 Barber Studio, você acumula pontos para trocar por serviços e produtos exclusivos.
               </p>
               
-              <div className="bg-background/40 border border-border p-6 rounded-xl mb-6">
+              <div className="bg-card border border-border p-6 rounded-xl mb-6">
                 <div className="flex justify-between items-center mb-3">
                   <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Progresso do Próximo Corte Grátis</span>
-                  <span className="text-sm font-bold text-primary">{appointments.filter(a => a.status === 'confirmed').length % 10}/10 Atendimentos</span>
+                  <span className="text-sm font-bold text-foreground">{appointments.filter(a => a.status === 'confirmed').length % 10}/10 Atendimentos</span>
                 </div>
                 <div className="w-full bg-muted h-3 rounded-full overflow-hidden border border-border">
                   <div 
-                    className="bg-gold-gradient h-full rounded-full transition-all duration-500 shadow-gold"
+                    className="bg-foreground h-full rounded-full transition-all duration-500 shadow-sm"
                     style={{ width: `${(appointments.filter(a => a.status === 'confirmed').length % 10) * 10}%` }}
                   ></div>
                 </div>
@@ -494,15 +472,15 @@ export default function Clientes() {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="bg-background/20 border border-border/60 p-5 rounded-xl">
+                <div className="bg-card border border-border p-5 rounded-xl">
                   <h4 className="font-bold text-sm text-foreground mb-2">Dados do Perfil</h4>
                   <p className="text-xs text-muted-foreground">Nome: <span className="text-foreground font-semibold">{user.name}</span></p>
                   <p className="text-xs text-muted-foreground mt-1">Contato: <span className="text-foreground font-semibold">{user.phone || user.email}</span></p>
                 </div>
-                <div className="bg-background/20 border border-border/60 p-5 rounded-xl flex items-center justify-center text-center">
+                <div className="bg-card border border-border p-5 rounded-xl flex items-center justify-center text-center">
                   <div>
-                    <p className="text-xs font-bold uppercase tracking-wider text-primary">Categoria de Cliente</p>
-                    <p className="text-xl font-black text-foreground mt-1 font-display tracking-wider">CLIENTE GOLD</p>
+                    <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Categoria de Cliente</p>
+                    <p className="text-xl font-black text-foreground mt-1 font-display tracking-wider">CLIENTE VIP</p>
                   </div>
                 </div>
               </div>
@@ -514,7 +492,7 @@ export default function Clientes() {
       {/* MODAL DE CONFIRMAÇÃO PERSONALIZADO */}
       {confirmModal.isOpen && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
-          <div className="bg-[#1c1c20]/95 backdrop-blur-xl w-full max-w-sm border border-destructive/30 rounded-2xl p-6 md:p-8 shadow-2xl relative animate-scale-in text-center">
+          <div className="bg-card/95 text-card-foreground backdrop-blur-xl w-full max-w-sm border border-destructive/30 rounded-2xl p-6 md:p-8 shadow-2xl relative animate-scale-in text-center">
             <div className="mx-auto w-12 h-12 bg-destructive/10 border border-destructive/25 text-destructive rounded-full flex items-center justify-center mb-4 animate-bounce">
               <AlertTriangle size={24} />
             </div>
@@ -550,7 +528,7 @@ export default function Clientes() {
       {/* MODAL DE CRIAÇÃO / EDIÇÃO DE CLIENTES */}
       {isCustomerModalOpen && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
-          <div className="bg-[#1c1c20]/95 backdrop-blur-xl w-full max-w-lg border border-primary/30 rounded-2xl p-6 md:p-8 shadow-2xl relative animate-scale-in">
+          <div className="bg-card/95 text-card-foreground backdrop-blur-xl w-full max-w-lg border border-primary/30 rounded-2xl p-6 md:p-8 shadow-2xl relative animate-scale-in">
             <h3 className="text-xl font-bold font-display mb-6 text-primary flex items-center gap-2">
               {editingCustomerId ? <Pencil size={20} /> : <Plus size={20} />}
               {editingCustomerId ? "Editar Ficha de Cliente" : "Cadastrar Novo Cliente"}
@@ -613,7 +591,7 @@ export default function Clientes() {
                 <div className="space-y-1 sm:col-span-2">
                   <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block mb-1">Foto do Cliente</label>
                   <div className="flex items-center gap-4 bg-background/40 border border-border p-4 rounded-xl">
-                    <div className="w-16 h-16 rounded-full overflow-hidden border border-gold-subtle shadow-sm bg-background/50 flex items-center justify-center shrink-0">
+                    <div className="w-16 h-16 rounded-full overflow-hidden border border-border shadow-sm bg-background/50 flex items-center justify-center shrink-0">
                       {customerPhoto ? (
                         <img src={customerPhoto} alt="Preview" className="w-full h-full object-cover" />
                       ) : (
@@ -656,17 +634,17 @@ export default function Clientes() {
                     setIsCustomerModalOpen(false)
                     resetCustomerForm()
                   }}
-                  className="flex-1 border border-border hover:bg-muted rounded-xl h-12 font-medium transition-colors cursor-pointer text-sm"
+                  className="flex-1 border border-border hover:bg-muted rounded-xl h-12 font-medium transition-colors cursor-pointer text-sm text-foreground"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
                   disabled={customerSubmitting}
-                  className="flex-1 bg-gold-gradient text-primary-foreground font-bold h-12 rounded-xl text-sm uppercase tracking-wider shadow-gold hover:shadow-gold-lg hover:-translate-y-0.5 transition-all duration-300 cursor-pointer disabled:opacity-50"
+                  className="btn-primary flex-1 h-12 rounded-xl text-sm uppercase tracking-wider cursor-pointer disabled:opacity-50"
                 >
                   {customerSubmitting ? (
-                    <div className="w-5 h-5 border-2 border-primary-foreground border-t-transparent rounded-full animate-spin mx-auto"></div>
+                    <div className="w-5 h-5 border-2 border-background border-t-transparent rounded-full animate-spin mx-auto"></div>
                   ) : (
                     "Salvar Ficha"
                   )}

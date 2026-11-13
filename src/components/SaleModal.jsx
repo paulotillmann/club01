@@ -222,12 +222,12 @@ export default function SaleModal({
 
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[70] p-4 animate-fade-in overflow-y-auto">
-      <div className="bg-[#1c1c20]/95 backdrop-blur-xl w-full max-w-2xl border border-gold-subtle/40 rounded-2xl p-6 md:p-8 shadow-2xl relative animate-scale-in my-6">
+      <div className="bg-card w-full max-w-2xl border border-border rounded-2xl p-6 md:p-8 shadow-2xl relative animate-scale-in my-6">
         
         {/* Cabeçalho */}
         <div className="flex items-center justify-between border-b border-border/40 pb-4 mb-4">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gold-gradient/10 border border-gold-subtle/30 flex items-center justify-center text-primary">
+            <div className="w-10 h-10 rounded-xl bg-primary/10 border border-border flex items-center justify-center text-primary">
               <ShoppingBag size={22} />
             </div>
             <div>
@@ -235,7 +235,7 @@ export default function SaleModal({
                 {existingSale ? "Editar Venda" : "Nova Venda de Produtos"}
               </h3>
               <p className="text-xs text-muted-foreground">
-                Cliente: <span className="text-primary font-bold">{clientName}</span> {apptDateStr ? `(${apptDateStr})` : ""}
+                Cliente: <span className="text-foreground font-bold">{clientName}</span> {apptDateStr ? `(${apptDateStr})` : ""}
               </p>
             </div>
           </div>
@@ -278,8 +278,8 @@ export default function SaleModal({
                     onClick={() => setPaymentMethod(pm.id)}
                     className={`py-2 px-2.5 rounded-xl border text-xs font-bold transition-all text-center cursor-pointer ${
                       isSel
-                        ? "bg-gold-gradient text-black border-gold-subtle shadow-md"
-                        : "bg-background/40 text-muted-foreground border-border/60 hover:text-foreground"
+                        ? "bg-foreground text-background border-foreground shadow-md"
+                        : "bg-card text-muted-foreground border-border hover:text-foreground"
                     }`}
                   >
                     {pm.label}
@@ -309,9 +309,9 @@ export default function SaleModal({
                       setIsProductDropdownOpen(val.trim().length > 0)
                     }}
                     placeholder="Digite para buscar produto..."
-                    className="w-full bg-background border border-border focus:border-primary rounded-xl py-2 pl-8 pr-8 text-xs text-foreground focus:outline-none transition-all"
+                    className="w-full bg-background border border-border focus:border-primary rounded-xl py-2 pl-9 pr-8 text-xs text-foreground focus:outline-none transition-all"
                   />
-                  <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground/60" />
+                  <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground/60 pointer-events-none" />
                   {productSearchTerm && (
                     <button
                       type="button"
@@ -330,14 +330,14 @@ export default function SaleModal({
 
                 {/* Dropdown Autocomplete de Produtos (Exibe apenas ao digitar termo de busca) */}
                 {isProductDropdownOpen && productSearchTerm.trim().length > 0 && (
-                  <div className="absolute left-0 right-0 top-full mt-1 bg-[#1c1c20] border border-gold-subtle/40 rounded-xl shadow-2xl z-[100] max-h-52 overflow-y-auto animate-scale-in">
+                  <div className="absolute left-0 right-0 top-full mt-1 bg-card border border-border rounded-xl shadow-2xl z-[100] max-h-52 overflow-y-auto animate-scale-in">
                     {filteredProductsList.length > 0 ? (
                       filteredProductsList.map((p) => (
                         <button
                           key={p.id}
                           type="button"
                           onClick={() => handleSelectProduct(p)}
-                          className="w-full text-left px-3 py-2.5 hover:bg-primary/20 border-b border-border/30 last:border-0 flex items-center justify-between cursor-pointer transition-colors text-xs"
+                          className="w-full text-left px-3 py-2.5 hover:bg-muted/40 border-b border-border/30 last:border-0 flex items-center justify-between cursor-pointer transition-colors text-xs"
                         >
                           <div className="flex flex-col min-w-0 pr-2">
                             <span className="font-bold text-foreground truncate">{p.name}</span>
@@ -345,7 +345,7 @@ export default function SaleModal({
                               Estoque: {p.stock_quantity ?? 0} un.
                             </span>
                           </div>
-                          <span className="font-mono font-bold text-primary shrink-0">
+                          <span className="font-mono font-bold text-foreground shrink-0">
                             R$ {Number(p.sale_price || 0).toFixed(2)}
                           </span>
                         </button>
@@ -366,7 +366,7 @@ export default function SaleModal({
                   min="1"
                   value={quantity}
                   onChange={(e) => setQuantity(e.target.value)}
-                  className="w-full bg-background border border-border focus:border-primary rounded-xl py-2 px-3 text-xs text-foreground text-center font-bold focus:outline-none transition-all"
+                  className="w-full bg-background border border-border focus:border-foreground rounded-xl py-2 px-3 text-xs text-foreground text-center font-bold focus:outline-none transition-all"
                 />
               </div>
 
@@ -377,7 +377,7 @@ export default function SaleModal({
                   value={unitPrice}
                   onChange={(e) => setUnitPrice(e.target.value)}
                   placeholder="0.00"
-                  className="w-full bg-background border border-border focus:border-primary rounded-xl py-2 px-3 text-xs text-foreground text-right font-mono focus:outline-none transition-all"
+                  className="w-full bg-background border border-border focus:border-foreground rounded-xl py-2 px-3 text-xs text-foreground text-right font-mono focus:outline-none transition-all"
                 />
               </div>
 
@@ -385,7 +385,7 @@ export default function SaleModal({
                 <button
                   type="button"
                   onClick={handleAddItem}
-                  className="w-full py-2 bg-primary/20 hover:bg-primary border border-primary/40 text-primary hover:text-background text-xs font-extrabold uppercase rounded-xl transition-all flex items-center justify-center gap-1 cursor-pointer"
+                  className="w-full py-2 bg-foreground text-background hover:opacity-90 border border-foreground text-xs font-extrabold uppercase rounded-xl transition-all flex items-center justify-center gap-1 cursor-pointer"
                 >
                   <Plus size={14} /> Add
                 </button>
@@ -406,7 +406,7 @@ export default function SaleModal({
             ) : (
               <div className="border border-border/60 rounded-xl overflow-hidden max-h-48 overflow-y-auto custom-scrollbar">
                 <table className="w-full text-left border-collapse text-xs">
-                  <thead className="bg-background/80 text-muted-foreground font-bold uppercase text-[9px] border-b border-border/40">
+                  <thead className="bg-muted/40 text-muted-foreground font-bold uppercase text-[9px] border-b border-border/40">
                     <tr>
                       <th className="p-2.5">Produto</th>
                       <th className="p-2.5 text-center">Qtd</th>
@@ -429,7 +429,7 @@ export default function SaleModal({
                           <td className="p-2.5 text-right font-mono text-muted-foreground">
                             R$ {it.unit_price.toFixed(2)}
                           </td>
-                          <td className="p-2.5 text-right font-mono font-bold text-primary">
+                          <td className="p-2.5 text-right font-mono font-bold text-foreground">
                             R$ {subtotal.toFixed(2)}
                           </td>
                           <td className="p-2.5 text-center">
@@ -452,14 +452,14 @@ export default function SaleModal({
           </div>
 
           {/* Opção de Integração com o Fluxo de Caixa */}
-          <div className="bg-background/30 border border-border/40 p-3.5 rounded-xl flex items-center justify-between">
+          <div className="bg-card border border-border p-3.5 rounded-xl flex items-center justify-between">
             <div className="flex items-center gap-2.5">
               <input
                 type="checkbox"
                 id="sync-caixa-check"
                 checked={syncCaixa}
                 onChange={(e) => setSyncCaixa(e.target.checked)}
-                className="w-4 h-4 rounded border-border text-primary focus:ring-primary cursor-pointer accent-amber-500"
+                className="w-4 h-4 rounded border-border text-foreground focus:ring-foreground cursor-pointer accent-foreground"
               />
               <label htmlFor="sync-caixa-check" className="text-xs font-bold text-foreground cursor-pointer select-none">
                 Lançar entrada no Fluxo de Caixa (Receita)
@@ -471,12 +471,12 @@ export default function SaleModal({
           </div>
 
           {/* Valor Total Geral */}
-          <div className="bg-gold-gradient/10 border border-gold-subtle/40 rounded-xl p-4 flex items-center justify-between">
-            <div className="flex items-center gap-2 text-primary">
+          <div className="bg-card border border-border rounded-xl p-4 flex items-center justify-between shadow-sm">
+            <div className="flex items-center gap-2 text-foreground">
               <DollarSign size={22} />
               <span className="font-bold uppercase tracking-wider text-xs">Total da Venda</span>
             </div>
-            <span className="text-xl font-black font-mono text-primary">
+            <span className="text-xl font-black font-mono text-foreground">
               R$ {totalAmount.toFixed(2).replace(".", ",")}
             </span>
           </div>
@@ -497,7 +497,7 @@ export default function SaleModal({
             <button
               type="button"
               onClick={onClose}
-              className="py-3 px-5 bg-muted/40 hover:bg-muted/60 text-foreground text-xs uppercase tracking-wider font-bold rounded-xl transition-all cursor-pointer border border-border/40"
+              className="py-3 px-5 bg-card hover:bg-muted text-foreground text-xs uppercase tracking-wider font-bold rounded-xl transition-all cursor-pointer border border-border"
             >
               Cancelar
             </button>
@@ -505,10 +505,10 @@ export default function SaleModal({
             <button
               type="submit"
               disabled={submitting || items.length === 0}
-              className="flex-1 py-3 bg-gold-gradient hover:shadow-gold-sm text-black text-xs uppercase tracking-wider font-black rounded-xl transition-all cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2"
+              className="flex-1 btn-primary py-3 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
             >
               {submitting ? (
-                <div className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin"></div>
+                <div className="w-4 h-4 border-2 border-background border-t-transparent rounded-full animate-spin"></div>
               ) : (
                 "Salvar Venda"
               )}

@@ -382,7 +382,7 @@ export default function CEventCalendar2({
                     className="p-2 md:p-3 text-center border-r border-border/40 last:border-r-0 min-w-0"
                   >
                     <div className="flex items-center justify-center gap-2 md:gap-2.5">
-                      <div className="w-9 h-9 md:w-12 md:h-12 rounded-full overflow-hidden border border-gold-subtle shadow-xs bg-background flex items-center justify-center shrink-0">
+                      <div className="w-9 h-9 md:w-12 md:h-12 rounded-full overflow-hidden border border-border shadow-xs bg-background flex items-center justify-center shrink-0">
                         {barberPhoto ? (
                           <img
                             src={barberPhoto}
@@ -554,11 +554,11 @@ export default function CEventCalendar2({
                             type="button"
                             onClick={() => onSelectAppointment && onSelectAppointment(appt)}
                             style={{ minHeight: `${rowSpan * 56 - 8}px`, height: "100%" }}
-                            className="w-full p-2.5 rounded-xl shadow-md border bg-gold-gradient text-black border-gold-subtle hover:scale-[1.01] active:scale-[0.99] transition-all text-left flex flex-col justify-between gap-1 cursor-pointer group overflow-hidden relative"
+                            className="w-full p-2.5 rounded-xl shadow-md border bg-card text-foreground border-border hover:border-foreground/50 hover:scale-[1.01] active:scale-[0.99] transition-all text-left flex flex-col justify-between gap-1 cursor-pointer group overflow-hidden relative"
                           >
                             <div className="flex flex-col gap-0.5 w-full">
                               <div className="flex items-center justify-between w-full gap-1">
-                                <span className="font-extrabold text-[12pt] truncate text-black">
+                                <span className="font-extrabold text-[12pt] truncate text-foreground">
                                   {appt.client_name || "Cliente"}
                                 </span>
                                 <div className="flex items-center gap-1 shrink-0 flex-wrap justify-end">
@@ -572,8 +572,8 @@ export default function CEventCalendar2({
                                       }}
                                       className={`px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider flex items-center gap-1 transition-all shadow-xs cursor-pointer ${
                                         currentPaymentMethod
-                                          ? "bg-black text-emerald-400 border border-emerald-500/80 hover:bg-neutral-900"
-                                          : "bg-black text-amber-300 border border-amber-500/60 hover:bg-neutral-900"
+                                          ? "bg-foreground text-background border border-foreground hover:opacity-90"
+                                          : "bg-muted text-foreground border border-border hover:bg-muted/80"
                                       }`}
                                       title={
                                         currentPaymentMethod
@@ -599,8 +599,8 @@ export default function CEventCalendar2({
                                     }}
                                     className={`px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider flex items-center gap-1 transition-all shadow-xs cursor-pointer ${
                                       apptSale
-                                        ? "bg-black text-white border border-emerald-500/80 hover:bg-neutral-900"
-                                        : "bg-black text-white border border-black/50 hover:bg-neutral-900"
+                                        ? "bg-foreground text-background border border-foreground hover:opacity-90"
+                                        : "bg-muted text-foreground border border-border hover:bg-muted/80"
                                     }`}
                                     title={
                                       apptSale
@@ -613,19 +613,19 @@ export default function CEventCalendar2({
                                   </button>
 
                                   {!hasCaixa && appt.price && (
-                                    <span className="bg-black/20 text-black px-1.5 py-0.5 rounded font-mono font-black text-[10px]">
+                                    <span className="bg-muted text-foreground px-1.5 py-0.5 rounded font-mono font-bold text-[10px]">
                                       R$ {Number(appt.price).toFixed(2)}
                                     </span>
                                   )}
                                 </div>
                               </div>
-                              <div className="text-[10pt] font-bold text-black/90 truncate">
+                              <div className="text-[10pt] font-semibold text-muted-foreground truncate">
                                 {appt.service_name || appt.services?.name || "Serviço"}
                               </div>
                             </div>
-                            <div className="flex items-center justify-between w-full mt-1 pt-1 border-t border-black/15 text-[9.5pt] font-bold font-mono text-black/80">
+                            <div className="flex items-center justify-between w-full mt-1 pt-1 border-t border-border/40 text-[9.5pt] font-bold font-mono text-muted-foreground">
                               <span>{slotTime} às {apptEndTimeStr}</span>
-                              <span className="bg-black/15 px-1.5 py-0.5 rounded text-[9pt] font-extrabold">{formatDurationHM(duration)}</span>
+                              <span className="bg-muted px-1.5 py-0.5 rounded text-[9pt] font-extrabold text-foreground">{formatDurationHM(duration)}</span>
                             </div>
                           </button>
                         </td>
@@ -641,7 +641,7 @@ export default function CEventCalendar2({
                       >
                         {isPastSlot ? (
                           <div
-                            className="w-full h-full bg-amber-500/15 text-amber-400/40 cursor-not-allowed flex items-center justify-center text-xs font-bold select-none"
+                            className="w-full h-full bg-muted/20 text-muted-foreground/30 cursor-not-allowed flex items-center justify-center text-xs font-bold select-none"
                             title="Horário encerrado"
                           >
                           </div>

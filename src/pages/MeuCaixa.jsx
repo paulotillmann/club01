@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react"
 import { useNavigate } from "react-router-dom"
-import { useAuth, API_URL } from "../context/AuthContext.jsx"
+import { useAuth } from "../context/AuthContext.jsx"
+import { barbersApi, caixaApi } from "../lib/api.js"
 import { 
   Wallet, 
   Scissors, 
@@ -8,7 +9,7 @@ import {
   TrendingUp, 
   ChevronLeft, 
   ChevronRight, 
-  ChevronDown,
+  ChevronDown, 
   Calendar as CalendarIcon, 
   RefreshCw, 
   DollarSign, 
@@ -58,7 +59,7 @@ function getTodayString() {
 }
 
 export default function MeuCaixa() {
-  const { user, token } = useAuth()
+  const { user } = useAuth()
   const navigate = useNavigate()
 
   const initialDate = new Date()
@@ -94,38 +95,20 @@ export default function MeuCaixa() {
 
   // Carregar dados do barbeiro e do caixa
   const fetchData = React.useCallback(async (isManualRefresh = false) => {
-    if (!token) return
     if (isManualRefresh) setRefreshing(true)
     else setLoading(true)
     setError("")
 
     try {
-      const headers = { Authorization: `Bearer ${token}` }
+      const [barberList, cData] = await Promise.all([
+        barbersApi.getAll().catch(() => []),
+        caixaApi.getAll().catch(() => [])
+      ])
 
-      // 1. Perfil do Barbeiro com comissões
-      const barberRes = await fetch(`${API_URL}/api/barbers/me`, { headers })
-      if (barberRes.ok) {
-        const bData = await barberRes.json()
-        setBarberProfile(bData)
-      } else {
-        // Tenta buscar lista geral de barbeiros e achar o id correspondente
-        const allBarbersRes = await fetch(`${API_URL}/api/barbers`, { headers })
-        if (allBarbersRes.ok) {
-          const list = await allBarbersRes.json()
-          const matched = list.find(b => b.id === user?.id || b.user_id === user?.id || b.name === user?.name)
-          if (matched) setBarberProfile(matched)
-        }
-      }
+      const matched = barberList.find(b => b.id === user?.id || b.user_id === user?.id || b.name === user?.name)
+      if (matched) setBarberProfile(matched)
 
-      // 2. Lançamentos de caixa
-      const caixaRes = await fetch(`${API_URL}/api/caixa`, { headers })
-      if (caixaRes.ok) {
-        const data = await caixaRes.json()
-        setTransactions(Array.isArray(data.transactions) ? data.transactions : [])
-      } else {
-        const errData = await caixaRes.json().catch(() => ({}))
-        setError(errData.error || "Não foi possível carregar as movimentações do caixa.")
-      }
+      setTransactions(cData || [])
     } catch (err) {
       console.error("Erro ao carregar dados do meu caixa:", err)
       setError("Erro de conexão ao buscar os lançamentos.")
@@ -133,7 +116,7 @@ export default function MeuCaixa() {
       setLoading(false)
       setRefreshing(false)
     }
-  }, [token, user?.id, user?.name])
+  }, [user?.id, user?.name])
 
   useEffect(() => {
     if (!user) {
@@ -307,7 +290,7 @@ export default function MeuCaixa() {
   const dateInfo = formatDateDisplay(selectedDate)
 
   return (
-    <div className="min-h-screen bg-background text-foreground flex flex-col pb-24 md:pb-28">
+    <div className="min-h-screen bg-background text-foreground flex flex-col pb-24 md:pb-28 sidebar-page-container">
       <Sidebar />
 
       {/* Container Mobile Otimizado */}
@@ -486,7 +469,7 @@ export default function MeuCaixa() {
                           }}
                           className={`py-2.5 px-3 text-xs font-bold rounded-xl text-center transition-all cursor-pointer ${
                             isSelected
-                              ? "bg-[#d4af37] text-black font-black shadow-gold scale-105"
+                              ? "bg-foreground text-background font-black shadow-sm scale-105"
                               : "bg-white/5 hover:bg-white/10 text-foreground border border-transparent hover:border-white/10"
                           }`}
                         >
@@ -538,29 +521,27 @@ export default function MeuCaixa() {
         )}
 
         {/* HERO CARD: Minha Comissão / Fat. Bruto do Dia */}
-        <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#d4af37]/20 via-amber-950/30 to-background border border-white/10 p-5 shadow-gold/10 shadow-xl transition-all duration-300">
-          <div className="absolute top-0 right-0 -mr-6 -mt-6 w-28 h-28 rounded-full bg-primary/10 blur-2xl pointer-events-none" />
-          
+        <div className="relative overflow-hidden rounded-3xl bg-card border border-border p-5 shadow-lg transition-all duration-300">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-black uppercase tracking-widest text-[#d4af37] flex items-center gap-1.5">
+            <span className="text-xs font-black uppercase tracking-widest text-foreground flex items-center gap-1.5">
               {showGross ? (
                 <>
-                  <TrendingUp size={14} className="text-[#d4af37]" /> Fat. Bruto:
+                  <TrendingUp size={14} className="text-foreground" /> Fat. Bruto:
                 </>
               ) : (
                 <>
-                  <Sparkles size={14} className="text-[#d4af37]" /> Comissão:
+                  <Sparkles size={14} className="text-foreground" /> Comissão:
                 </>
               )}
             </span>
             <div className="flex items-center gap-2">
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-black/40 text-muted-foreground border border-white/5">
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-muted text-muted-foreground border border-border/40">
                 {showGross ? "Bruto" : "Líquido"}
               </span>
               <button
                 type="button"
                 onClick={() => setShowGross(prev => !prev)}
-                className="p-1.5 rounded-xl bg-black/40 hover:bg-black/70 text-[#d4af37] hover:text-amber-300 border border-white/10 hover:border-[#d4af37]/40 transition-all cursor-pointer flex items-center gap-1 active:scale-95 shadow-xs"
+                className="p-1.5 rounded-xl bg-muted/60 hover:bg-muted text-foreground border border-border transition-all cursor-pointer flex items-center gap-1 active:scale-95 shadow-xs"
                 title={showGross ? "Alternar para Minha Comissão" : "Alternar para Faturamento Bruto"}
                 aria-label={showGross ? "Alternar para Minha Comissão" : "Alternar para Faturamento Bruto"}
               >
@@ -577,10 +558,10 @@ export default function MeuCaixa() {
             )}
           </div>
 
-          <div className="mt-3 pt-3 border-t border-white/10 grid grid-cols-2 gap-2 text-xs">
-            <div className="bg-black/30 backdrop-blur-sm rounded-xl p-2.5 border border-white/5">
+          <div className="mt-3 pt-3 border-t border-border/40 grid grid-cols-2 gap-2 text-xs">
+            <div className="bg-muted/30 rounded-xl p-2.5 border border-border/40">
               <div className="text-[10px] text-muted-foreground font-semibold uppercase flex items-center gap-1 truncate">
-                <Scissors size={11} className="text-[#d4af37] shrink-0" />
+                <Scissors size={11} className="text-foreground shrink-0" />
                 <span className="truncate">
                   {showGross 
                     ? "Total em Serviço" 
@@ -596,9 +577,9 @@ export default function MeuCaixa() {
               </div>
             </div>
 
-            <div className="bg-black/30 backdrop-blur-sm rounded-xl p-2.5 border border-white/5">
+            <div className="bg-muted/30 rounded-xl p-2.5 border border-border/40">
               <div className="text-[10px] text-muted-foreground font-semibold uppercase flex items-center gap-1 truncate">
-                <ShoppingBag size={11} className="text-[#d4af37] shrink-0" />
+                <ShoppingBag size={11} className="text-foreground shrink-0" />
                 <span className="truncate">
                   {showGross 
                     ? "Total em Produtos" 

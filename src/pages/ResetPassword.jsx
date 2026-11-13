@@ -1,10 +1,12 @@
 import React, { useState } from "react"
 import { useNavigate } from "react-router-dom"
-import { API_URL } from "../context/AuthContext.jsx"
+import { useAuth } from "../context/AuthContext.jsx"
 import { Lock, User, AlertCircle, ArrowLeft, CheckCircle2, Eye, EyeOff } from "lucide-react"
+import Logo from "../components/Logo.jsx"
 
 export default function ResetPassword() {
   const navigate = useNavigate()
+  const { resetPassword } = useAuth()
   
   const [loginKey, setLoginKey] = useState("") // Aceita e-mail ou telefone
   const [newPassword, setNewPassword] = useState("")
@@ -32,43 +34,23 @@ export default function ResetPassword() {
     }
 
     try {
-      const response = await fetch(`${API_URL}/api/auth/reset-password`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          loginKey: loginKey.trim(),
-          newPassword: newPassword
-        })
-      })
-
-      const data = await response.json()
-
-      if (response.ok) {
-        setSuccessMsg(data.message || "Sua senha foi redefinida com sucesso!")
-        setLoginKey("")
-        setNewPassword("")
-      } else {
-        setError(data.error || "Não foi possível redefinir a senha.")
-      }
-    } catch {
-      setError("Erro ao conectar com o servidor. Verifique sua conexão.")
+      const res = await resetPassword(loginKey.trim(), newPassword)
+      setSuccessMsg(res.message || "Solicitação de redefinição processada com sucesso!")
+      setLoginKey("")
+      setNewPassword("")
+    } catch (err) {
+      setError(err.message || "Não foi possível redefinir a senha.")
     } finally {
       setLoading(false)
     }
   }
 
   return (
-    <div className="min-h-screen bg-transparent flex flex-col justify-center items-center px-4 relative pt-20">
-      {/* Background elements */}
-      <div className="absolute top-1/4 left-1/4 w-72 h-72 bg-primary/5 rounded-full blur-[100px] pointer-events-none"></div>
-      <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-accent/5 rounded-full blur-[120px] pointer-events-none"></div>
-      
+    <div className="min-h-screen bg-background text-foreground flex flex-col justify-center items-center px-4 relative py-20">
       {/* Back Button */}
       <button 
         onClick={() => navigate("/login")}
-        className="absolute top-24 left-4 md:left-10 flex items-center gap-2 text-muted-foreground hover:text-primary transition-colors cursor-pointer text-sm font-medium"
+        className="absolute top-20 left-4 md:left-10 inline-flex items-center gap-2 min-h-[44px] px-3.5 rounded-xl border border-border bg-card/80 text-foreground hover:bg-muted transition-colors cursor-pointer text-xs font-semibold"
       >
         <ArrowLeft size={16} /> Voltar para o Login
       </button>
@@ -76,34 +58,38 @@ export default function ResetPassword() {
       <div className="w-full max-w-md z-10">
         {/* Header Logo */}
         <div className="flex flex-col items-center mb-8">
-          <img src="/assets/logo-nova-sem-borda.png" alt="Barbearia Do Vale" className="h-[152px] md:h-[200px] w-auto object-contain mb-4" />
-          <h2 className="text-2xl font-bold font-display tracking-wide uppercase">
+          <div className="mb-4">
+            <Logo size="lg" showText={false} className="" />
+          </div>
+          <h1 className="text-3xl md:text-4xl font-bold font-display tracking-tight uppercase text-foreground">
             Redefinir Senha
-          </h2>
-          <p className="text-muted-foreground text-sm mt-1 text-center">
+          </h1>
+          <p className="text-muted-foreground text-sm mt-1 text-center font-medium">
             Insira suas credenciais cadastradas para criar uma nova senha
           </p>
         </div>
 
         {/* Card Form */}
-        <div className="glass-card rounded-2xl border border-gold-subtle p-8 shadow-elevated">
+        <div className="club-card p-6 sm:p-8">
           {error && (
-            <div className="flex items-center gap-3 bg-destructive/10 border border-destructive/20 text-destructive text-sm rounded-xl p-4 mb-6 animate-fade-in">
+            <div className="flex items-center gap-3 bg-destructive/10 border border-destructive/20 text-destructive text-sm rounded-xl p-4 mb-6">
               <AlertCircle size={20} className="shrink-0" />
-              <span>{error}</span>
+              <span className="font-medium">{error}</span>
             </div>
           )}
 
           {successMsg && (
-            <div className="space-y-6 text-center animate-scale-in">
-              <div className="flex flex-col items-center gap-3 bg-green-500/10 border border-green-500/20 text-green-400 text-sm rounded-xl p-5">
-                <CheckCircle2 size={36} className="text-green-400 animate-pulse mb-1" />
+            <div className="space-y-6 text-center">
+              <div className="flex flex-col items-center gap-3 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-sm rounded-xl p-5">
+                <CheckCircle2 size={36} className="text-emerald-400 mb-1" />
                 <span className="font-semibold text-base">{successMsg}</span>
-                <p className="text-xs text-muted-foreground leading-relaxed mt-1">Sua conta foi atualizada. Agora você pode entrar com a sua nova senha.</p>
+                <p className="text-xs text-muted-foreground leading-relaxed mt-1">
+                  Sua conta foi atualizada. Agora você pode entrar com a sua nova senha.
+                </p>
               </div>
               <button
                 onClick={() => navigate("/login")}
-                className="w-full inline-flex items-center justify-center gap-2 bg-gold-gradient text-primary-foreground font-bold h-14 rounded-xl text-sm uppercase tracking-wider shadow-gold hover:shadow-gold-lg transition-all duration-300 cursor-pointer"
+                className="btn-primary w-full h-14 text-base"
               >
                 Ir para o Login
               </button>
@@ -111,33 +97,33 @@ export default function ResetPassword() {
           )}
 
           {!successMsg && (
-            <form onSubmit={handleSubmit} className="space-y-6">
+            <form onSubmit={handleSubmit} className="space-y-5">
               <div className="space-y-2">
-                <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">E-mail ou Telefone</label>
+                <label className="text-xs font-semibold uppercase tracking-wider text-foreground">E-mail ou Telefone</label>
                 <div className="relative">
-                  <User className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground w-5 h-5" />
+                  <User className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground w-5 h-5 pointer-events-none" />
                   <input
                     type="text"
                     required
                     value={loginKey}
                     onChange={(e) => setLoginKey(e.target.value)}
-                    placeholder="Ex: paulogtillmann@gmail.com ou (84) 99999-9999"
-                    className="w-full bg-background/50 border border-border focus:border-primary rounded-xl py-3.5 pl-12 pr-4 text-foreground placeholder-muted-foreground focus:outline-none transition-all duration-300"
+                    placeholder="E-mail ou telefone"
+                    className="club-input w-full pl-12"
                   />
                 </div>
               </div>
 
               <div className="space-y-2">
-                <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Nova Senha</label>
+                <label className="text-xs font-semibold uppercase tracking-wider text-foreground">Nova Senha</label>
                 <div className="relative">
-                  <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground w-5 h-5" />
+                  <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground w-5 h-5 pointer-events-none" />
                   <input
                     type={showPassword ? "text" : "password"}
                     required
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
                     placeholder="••••••••"
-                    className="w-full bg-background/50 border border-border focus:border-primary rounded-xl py-3.5 pl-12 pr-12 text-foreground placeholder-muted-foreground focus:outline-none transition-all duration-300"
+                    className="club-input w-full pl-12 pr-12"
                   />
                   <button
                     type="button"
@@ -153,12 +139,12 @@ export default function ResetPassword() {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full inline-flex items-center justify-center gap-2.5 bg-gold-gradient text-primary-foreground font-semibold shadow-gold hover:shadow-gold-lg hover:-translate-y-0.5 active:translate-y-0 h-14 rounded-xl text-base transition-all duration-500 cursor-pointer disabled:opacity-50 disabled:pointer-events-none"
+                className="btn-primary w-full h-14 text-base"
               >
                 {loading ? (
                   <div className="w-5 h-5 border-2 border-primary-foreground border-t-transparent rounded-full animate-spin"></div>
                 ) : (
-                  "Redefinir Minha Senha"
+                  "Confirmar Nova Senha"
                 )}
               </button>
             </form>
@@ -168,3 +154,4 @@ export default function ResetPassword() {
     </div>
   )
 }
+

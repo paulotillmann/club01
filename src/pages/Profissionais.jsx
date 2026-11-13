@@ -1,15 +1,17 @@
 import React, { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
-import { useAuth, API_URL } from "../context/AuthContext.jsx"
+import { useAuth } from "../context/AuthContext.jsx"
+import { barbersApi, usersApi } from "../lib/api.js"
 import { User, Plus, Pencil, Trash2, CheckCircle2, AlertTriangle, Upload } from "lucide-react"
 import Sidebar from "../components/Sidebar.jsx"
 
 export default function Profissionais() {
-  const { user, token } = useAuth()
+  const { user } = useAuth()
   const navigate = useNavigate()
 
   const [barbers, setBarbers] = useState([])
   const [systemUsers, setSystemUsers] = useState([])
+  const [loadingBarbers, setLoadingBarbers] = useState(true)
   const [isBarberModalOpen, setIsBarberModalOpen] = useState(false)
   const [editingBarberId, setEditingBarberId] = useState(null)
   const [barberName, setBarberName] = useState("")
@@ -39,27 +41,23 @@ export default function Profissionais() {
     }
 
     async function loadData() {
+      setLoadingBarbers(true)
       try {
-        const [barbRes, usersRes] = await Promise.all([
-          fetch(`${API_URL}/api/barbers`),
-          token ? fetch(`${API_URL}/api/users`, { headers: { Authorization: `Bearer ${token}` } }) : null
+        const [bData, uData] = await Promise.all([
+          barbersApi.getAll(),
+          usersApi.getAll().catch(() => [])
         ])
-
-        if (barbRes && barbRes.ok) {
-          const data = await barbRes.json()
-          setBarbers(data)
-        }
-        if (usersRes && usersRes.ok) {
-          const uData = await usersRes.json()
-          setSystemUsers(uData)
-        }
+        setBarbers(bData || [])
+        setSystemUsers(uData || [])
       } catch (err) {
         console.error("Erro ao carregar dados dos profissionais:", err)
+      } finally {
+        setLoadingBarbers(false)
       }
     }
 
     loadData()
-  }, [user, token, navigate])
+  }, [user, navigate])
 
   const showConfirm = (title, message, onConfirm) => {
     setConfirmModal({
@@ -199,23 +197,11 @@ export default function Profissionais() {
     }
 
     try {
-      const url = editingBarberId 
-        ? `${API_URL}/api/barbers/${editingBarberId}` 
-        : `${API_URL}/api/barbers`
-      const method = editingBarberId ? "PUT" : "POST"
-
-      const res = await fetch(url, {
-        method,
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify(payload)
-      })
-
-      const data = await res.json()
-      if (!res.ok) {
-        throw new Error(data.error || "Erro ao salvar profissional.")
+      let savedBarber
+      if (editingBarberId) {
+        savedBarber = await barbersApi.update(editingBarberId, payload)
+      } else {
+        savedBarber = await barbersApi.create(payload)
       }
 
       setBarberSuccess(editingBarberId ? "Profissional atualizado com sucesso!" : "Profissional cadastrado com sucesso!")
@@ -224,9 +210,9 @@ export default function Profissionais() {
       }, 5000)
 
       if (editingBarberId) {
-        setBarbers(prev => prev.map(b => b.id === editingBarberId ? data.barber : b))
+        setBarbers(prev => prev.map(b => b.id === editingBarberId ? savedBarber : b))
       } else {
-        setBarbers(prev => [...prev, data.barber])
+        setBarbers(prev => [...prev, savedBarber])
       }
 
       setIsBarberModalOpen(false)
@@ -251,23 +237,14 @@ export default function Profissionais() {
     setBarberSuccess("")
 
     try {
-      const res = await fetch(`${API_URL}/api/barbers/${id}`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` }
-      })
-
-      if (!res.ok) {
-        const data = await res.json()
-        throw new Error(data.error || "Erro ao excluir profissional.")
-      }
-
+      await barbersApi.delete(id)
       setBarberSuccess("Profissional excluído com sucesso!")
       setTimeout(() => {
         setBarberSuccess("")
       }, 5000)
       setBarbers(prev => prev.filter(b => b.id !== id))
     } catch (err) {
-      setBarberError(err.message)
+      setBarberError(err.message || "Erro ao excluir profissional.")
     }
   }
 
@@ -317,14 +294,38 @@ export default function Profissionais() {
                     resetBarberForm()
                     setIsBarberModalOpen(true)
                   }}
-                  className="inline-flex items-center gap-2 px-4 py-2.5 bg-gold-gradient text-primary-foreground font-bold text-xs uppercase tracking-wider rounded-xl shadow-gold hover:shadow-gold-lg hover:-translate-y-0.5 transition-all duration-300 cursor-pointer"
+                  className="btn-primary inline-flex items-center gap-2 px-4 py-2.5 text-xs uppercase tracking-wider cursor-pointer"
                 >
                   <Plus size={14} /> Novo Profissional
                 </button>
               )}
             </div>
             
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8 justify-items-center">
+            {loadingBarbers ? (
+              <div className="grid grid-cols-1 sm:grid-cols-[repeat(auto-fill,280px)] gap-5 justify-items-start">
+                {[1, 2, 3].map((n) => (
+                  <div key={n} className="w-full max-w-[280px] bg-muted/20 border border-border/50 rounded-2xl p-6 animate-pulse flex flex-col items-center">
+                    <div className="w-28 h-28 rounded-full bg-muted mb-4" />
+                    <div className="h-4 bg-muted rounded w-2/3 mb-2" />
+                    <div className="h-3 bg-muted rounded w-1/2 mb-6" />
+                    <div className="w-full space-y-2 border-t border-border/40 pt-4">
+                      <div className="h-3 bg-muted rounded w-full" />
+                      <div className="h-3 bg-muted rounded w-4/5" />
+                    </div>
+                    <div className="h-8 bg-muted rounded-xl w-full mt-6" />
+                  </div>
+                ))}
+              </div>
+            ) : barbers.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground border border-dashed border-border rounded-xl">
+                <User size={40} className="stroke-1 mb-3 text-muted-foreground/30" />
+                <p className="text-sm font-medium">Nenhum profissional cadastrado.</p>
+                {user.role === 'admin' && (
+                  <p className="text-xs mt-1 text-muted-foreground/60">Clique em "Novo Profissional" para adicionar.</p>
+                )}
+              </div>
+            ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-[repeat(auto-fill,280px)] gap-5 justify-items-start">
               {barbers.map((barb, index) => {
                 const photo = barb.photo || (
                   index === 0 ? "/assets/marcio-barber.jpeg" :
@@ -337,7 +338,7 @@ export default function Profissionais() {
                       <img src={photo} alt={barb.name} className="w-full h-full object-cover object-top scale-102 group-hover:scale-108 transition-transform duration-500" />
                     </div>
                     <h4 className="font-bold text-[12pt] uppercase tracking-wide text-foreground mt-2">{barb.name}</h4>
-                    <span className="text-[10pt] font-bold uppercase tracking-widest text-primary mt-1">{barb.specialty || "Especialista Do Vale"}</span>
+                    <span className="text-[10pt] font-bold uppercase tracking-widest text-primary mt-1">{barb.specialty || "Especialista CLUB 01"}</span>
                     
                     <div className="space-y-1.5 text-left w-full text-[10pt] text-muted-foreground border-t border-border/40 pt-4 mt-4 flex-1">
                       <div className="flex items-center gap-1.5">
@@ -402,6 +403,7 @@ export default function Profissionais() {
                 )
               })}
             </div>
+            )}
           </div>
         </div>
       </div>
@@ -409,7 +411,7 @@ export default function Profissionais() {
       {/* MODAL DE CONFIRMAÇÃO PERSONALIZADO */}
       {confirmModal.isOpen && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
-          <div className="bg-[#1c1c20]/95 backdrop-blur-xl w-full max-w-sm border border-destructive/30 rounded-2xl p-6 md:p-8 shadow-2xl relative animate-scale-in text-center">
+          <div className="bg-card/95 text-card-foreground backdrop-blur-xl w-full max-w-sm border border-destructive/30 rounded-2xl p-6 md:p-8 shadow-2xl relative animate-scale-in text-center">
             <div className="mx-auto w-12 h-12 bg-destructive/10 border border-destructive/25 text-destructive rounded-full flex items-center justify-center mb-4 animate-bounce">
               <AlertTriangle size={24} />
             </div>
@@ -445,7 +447,7 @@ export default function Profissionais() {
       {/* MODAL DE CRIAÇÃO / EDIÇÃO DE PROFISSIONAIS */}
       {isBarberModalOpen && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
-          <div className="bg-[#1c1c20]/95 backdrop-blur-xl w-full max-w-lg border border-primary/30 rounded-2xl p-6 md:p-8 shadow-2xl relative animate-scale-in">
+          <div className="bg-card/95 text-card-foreground backdrop-blur-xl w-full max-w-lg border border-primary/30 rounded-2xl p-6 md:p-8 shadow-2xl relative animate-scale-in">
             <h3 className="text-xl font-bold font-display mb-6 text-primary flex items-center gap-2">
               {editingBarberId ? <Pencil size={20} /> : <Plus size={20} />}
               {editingBarberId ? "Editar Ficha de Profissional" : "Cadastrar Novo Profissional"}
@@ -564,7 +566,7 @@ export default function Profissionais() {
                 <div className="space-y-1 sm:col-span-2">
                   <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block mb-1">Foto do Profissional</label>
                   <div className="flex items-center gap-4 bg-background/40 border border-border p-4 rounded-xl">
-                    <div className="w-16 h-16 rounded-full overflow-hidden border border-gold-subtle shadow-sm bg-background/50 flex items-center justify-center shrink-0">
+                    <div className="w-16 h-16 rounded-full overflow-hidden border border-border shadow-sm bg-background/50 flex items-center justify-center shrink-0">
                       {barberPhoto ? (
                         <img src={barberPhoto} alt="Preview" className="w-full h-full object-cover" />
                       ) : (
@@ -607,17 +609,17 @@ export default function Profissionais() {
                     setIsBarberModalOpen(false)
                     resetBarberForm()
                   }}
-                  className="flex-1 border border-border hover:bg-muted rounded-xl h-12 font-medium transition-colors cursor-pointer text-sm"
+                  className="flex-1 border border-border hover:bg-muted rounded-xl h-12 font-medium transition-colors cursor-pointer text-sm text-foreground"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
                   disabled={barberSubmitting}
-                  className="flex-1 bg-gold-gradient text-primary-foreground font-bold h-12 rounded-xl text-sm uppercase tracking-wider shadow-gold hover:shadow-gold-lg hover:-translate-y-0.5 transition-all duration-300 cursor-pointer disabled:opacity-50"
+                  className="btn-primary flex-1 h-12 rounded-xl text-sm uppercase tracking-wider cursor-pointer disabled:opacity-50"
                 >
                   {barberSubmitting ? (
-                    <div className="w-5 h-5 border-2 border-primary-foreground border-t-transparent rounded-full animate-spin mx-auto"></div>
+                    <div className="w-5 h-5 border-2 border-background border-t-transparent rounded-full animate-spin mx-auto"></div>
                   ) : (
                     "Salvar Ficha"
                   )}

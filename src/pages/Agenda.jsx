@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from "react"
 import { useNavigate } from "react-router-dom"
-import { useAuth, API_URL } from "../context/AuthContext.jsx"
+import { useAuth } from "../context/AuthContext.jsx"
+import { appointmentsApi, servicesApi, barbersApi, customersApi } from "../lib/api.js"
+import { formatPhoneNumber } from "../lib/phone.js"
 import { Calendar as CalendarIcon, Clock, User, Plus, AlertTriangle, CheckCircle2, Check, Search, UserPlus, X, Trash2, Edit3, UserX, RotateCcw, Radio, ReceiptText } from "lucide-react"
 import Sidebar from "../components/Sidebar.jsx"
 import CaixaEntryModal from "../components/CaixaEntryModal.jsx"
@@ -73,9 +75,6 @@ export default function Agenda() {
     "Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"
   ]
 
-
-
-
   useEffect(() => {
     if (!user) {
       navigate("/login")
@@ -84,58 +83,40 @@ export default function Agenda() {
 
     async function fetchData() {
       try {
-        const headers = { Authorization: `Bearer ${token}` }
+        const [apptData, srvData, barbData, custData] = await Promise.all([
+          appointmentsApi.getAll().catch(() => []),
+          servicesApi.getAll().catch(() => []),
+          barbersApi.getAll().catch(() => []),
+          customersApi.getAll().catch(() => [])
+        ])
 
-        const apptRes = await fetch(`${API_URL}/api/appointments`, { headers })
-        if (apptRes.ok) {
-          const apptData = await apptRes.json()
-          setAppointments(apptData)
-        }
-
-        const srvRes = await fetch(`${API_URL}/api/services`)
-        if (srvRes.ok) {
-          const srvData = await srvRes.json()
-          setServices(srvData)
-        }
-
-        const barbRes = await fetch(`${API_URL}/api/barbers`)
-        if (barbRes.ok) {
-          const barbData = await barbRes.json()
-          setBarbers(barbData)
-        }
-
-        const custRes = await fetch(`${API_URL}/api/customers`, { headers })
-        if (custRes.ok) {
-          const custData = await custRes.json()
-          setCustomers(custData)
-        }
+        setAppointments(apptData || [])
+        setServices(srvData || [])
+        setBarbers(barbData || [])
+        setCustomers(custData || [])
       } catch (err) {
         console.error("Erro ao carregar dados:", err)
       }
     }
 
     fetchData()
-  }, [user, token, navigate])
+  }, [user, navigate])
 
   // Atualização em tempo real (Realtime polling) para a tabela de agendamentos
   useEffect(() => {
-    if (!user || !token || !isRealtimeEnabled) return
+    if (!user || !isRealtimeEnabled) return
 
     const interval = setInterval(async () => {
       try {
-        const headers = { Authorization: `Bearer ${token}` }
-        const apptRes = await fetch(`${API_URL}/api/appointments`, { headers })
-        if (apptRes.ok) {
-          const apptData = await apptRes.json()
-          setAppointments(apptData)
-        }
+        const apptData = await appointmentsApi.getAll()
+        setAppointments(apptData || [])
       } catch (err) {
         console.error("Erro ao atualizar agendamentos em tempo real:", err)
       }
     }, 5000)
 
     return () => clearInterval(interval)
-  }, [user, token, isRealtimeEnabled])
+  }, [user, isRealtimeEnabled])
 
   // Fechar dropdown de busca ao clicar fora
   useEffect(() => {
@@ -147,21 +128,6 @@ export default function Agenda() {
     document.addEventListener("mousedown", handleClickOutside)
     return () => document.removeEventListener("mousedown", handleClickOutside)
   }, [])
-
-  const formatPhoneNumber = (value) => {
-    if (!value) return value
-    const phoneNumber = value.replace(/[^\d]/g, "")
-    const phoneNumberLength = phoneNumber.length
-
-    if (phoneNumberLength < 3) return phoneNumber
-    if (phoneNumberLength < 7) {
-      return `(${phoneNumber.slice(0, 2)}) ${phoneNumber.slice(2)}`
-    }
-    if (phoneNumberLength < 11) {
-      return `(${phoneNumber.slice(0, 2)}) ${phoneNumber.slice(2, 6)}-${phoneNumber.slice(6)}`
-    }
-    return `(${phoneNumber.slice(0, 2)}) ${phoneNumber.slice(2, 7)}-${phoneNumber.slice(7, 11)}`
-  }
 
   const getTimeSlots = (dateString) => {
     if (!dateString) return []
@@ -273,13 +239,8 @@ export default function Agenda() {
 
   const refreshCustomers = async () => {
     try {
-      const res = await fetch(`${API_URL}/api/customers`, {
-        headers: { Authorization: `Bearer ${token}` }
-      })
-      if (res.ok) {
-        const data = await res.json()
-        setCustomers(data)
-      }
+      const data = await customersApi.getAll()
+      setCustomers(data || [])
     } catch (err) {
       console.error("Erro ao atualizar lista de clientes:", err)
     }
@@ -332,7 +293,6 @@ export default function Agenda() {
     setIsCustomerDropdownOpen(false)
   }
 
-
   const handleCreateNewCustomer = async (e) => {
     e.preventDefault()
     setNewCustomerSubmitting(true)
@@ -345,31 +305,19 @@ export default function Agenda() {
     }
 
     try {
-      const res = await fetch(`${API_URL}/api/customers`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          name: newCustomerName.trim().toUpperCase(),
-          phone: newCustomerPhone.trim()
-        })
+      const newCust = await customersApi.create({
+        name: newCustomerName.trim().toUpperCase(),
+        phone: newCustomerPhone.trim()
       })
 
-      const data = await res.json()
-      if (!res.ok) {
-        throw new Error(data.error || "Erro ao cadastrar cliente.")
-      }
-
-      setCustomers(prev => [...prev, data.customer])
-      setClientName(data.customer.name)
-      setClientPhone(formatPhoneNumber(data.customer.phone || ""))
+      setCustomers(prev => [...prev, newCust])
+      setClientName(newCust.name)
+      setClientPhone(formatPhoneNumber(newCust.phone || ""))
       setIsNewCustomerModalOpen(false)
       setNewCustomerName("")
       setNewCustomerPhone("")
     } catch (err) {
-      setNewCustomerError(err.message)
+      setNewCustomerError(err.message || "Erro ao cadastrar cliente.")
     } finally {
       setNewCustomerSubmitting(false)
     }
@@ -427,25 +375,15 @@ export default function Agenda() {
     if (!editingAppointmentId) return
     setSubmitLoading(true)
     try {
-      const res = await fetch(`${API_URL}/api/appointments/${editingAppointmentId}/cancel`, {
-        method: "PUT",
-        headers: { Authorization: `Bearer ${token}` }
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || "Erro ao cancelar agenda.")
+      await appointmentsApi.cancel(editingAppointmentId, "Cancelado via painel de agendamento")
 
       setSuccessMsg("Agendamento cancelado com sucesso!")
       setTimeout(() => setSuccessMsg(""), 5000)
       setIsNewAppointmentModalOpen(false)
       setEditingAppointmentId(null)
 
-      const appRes = await fetch(`${API_URL}/api/appointments`, {
-        headers: { Authorization: `Bearer ${token}` }
-      })
-      if (appRes.ok) {
-        const apptData = await appRes.json()
-        setAppointments(apptData)
-      }
+      const apptData = await appointmentsApi.getAll()
+      setAppointments(apptData || [])
     } catch (err) {
       setError(err.message)
     } finally {
@@ -457,29 +395,15 @@ export default function Agenda() {
     if (!editingAppointmentId) return
     setSubmitLoading(true)
     try {
-      const res = await fetch(`${API_URL}/api/appointments/${editingAppointmentId}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({ status: "confirmed" })
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || "Erro ao reativar agenda.")
+      await appointmentsApi.update(editingAppointmentId, { status: "confirmed", cancellation_reason: null })
 
       setSuccessMsg("Cancelamento desfeito com sucesso!")
       setTimeout(() => setSuccessMsg(""), 5000)
       setIsNewAppointmentModalOpen(false)
       setEditingAppointmentId(null)
 
-      const appRes = await fetch(`${API_URL}/api/appointments`, {
-        headers: { Authorization: `Bearer ${token}` }
-      })
-      if (appRes.ok) {
-        const apptData = await appRes.json()
-        setAppointments(apptData)
-      }
+      const apptData = await appointmentsApi.getAll()
+      setAppointments(apptData || [])
     } catch (err) {
       setError(err.message)
     } finally {
@@ -522,29 +446,21 @@ export default function Agenda() {
     const appointmentTime = `${selectedDate}T${selectedTime}`
 
     try {
-      const url = editingAppointmentId
-        ? `${API_URL}/api/appointments/${editingAppointmentId}`
-        : `${API_URL}/api/appointments`
-      const method = editingAppointmentId ? "PUT" : "POST"
-
-      const response = await fetch(url, {
-        method,
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          barber_id: selectedBarber,
-          service_id: selectedServices,
-          appointment_time: appointmentTime,
-          name: clientName,
-          phone: clientPhone
+      if (editingAppointmentId) {
+        await appointmentsApi.rescheduleOnline({
+          appointmentId: editingAppointmentId,
+          newAppointmentTime: appointmentTime,
+          newBarberId: selectedBarber,
+          serviceIds: selectedServices
         })
-      })
-
-      const data = await response.json()
-      if (!response.ok) {
-        throw new Error(data.error || "Erro ao salvar agendamento.")
+      } else {
+        await appointmentsApi.bookOnline({
+          name: clientName,
+          phone: clientPhone,
+          barberId: selectedBarber,
+          serviceIds: selectedServices,
+          appointmentTime
+        })
       }
 
       setSuccessMsg(editingAppointmentId ? "Agendamento atualizado com sucesso!" : "Agendamento realizado com sucesso!")
@@ -562,20 +478,14 @@ export default function Agenda() {
       setIsNewAppointmentModalOpen(false)
       setError("")
 
-      const appRes = await fetch(`${API_URL}/api/appointments`, {
-        headers: { Authorization: `Bearer ${token}` }
-      })
-      if (appRes.ok) {
-        const apptData = await appRes.json()
-        setAppointments(apptData)
-      }
+      const apptData = await appointmentsApi.getAll()
+      setAppointments(apptData || [])
     } catch (err) {
       setError(err.message || "Erro de conexão ao realizar agendamento.")
     } finally {
       setSubmitLoading(false)
     }
   }
-
 
   const handleToggleAbsentModal = async () => {
     if (!editingAppointmentId) return
@@ -589,23 +499,9 @@ export default function Agenda() {
     )
 
     try {
-      const response = await fetch(`${API_URL}/api/appointments/${editingAppointmentId}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ status: newStatus }),
-      })
-
-      if (!response.ok) {
-        setAppointments(prev =>
-          prev.map(a => (a.id === editingAppointmentId ? { ...a, status: currentEditingAppt.status } : a))
-        )
-      } else {
-        setIsNewAppointmentModalOpen(false)
-        setEditingAppointmentId(null)
-      }
+      await appointmentsApi.update(editingAppointmentId, { status: newStatus })
+      setIsNewAppointmentModalOpen(false)
+      setEditingAppointmentId(null)
     } catch (err) {
       console.error("Erro ao alterar status ausente:", err)
       setAppointments(prev =>
@@ -769,14 +665,14 @@ export default function Agenda() {
                           type="button"
                           onClick={() => setBarberFilter(isSelected ? null : barb.id)}
                           className={`relative group/barbfilter rounded-full transition-all duration-300 cursor-pointer flex items-center justify-center p-0.5 border ${isSelected
-                            ? "border-primary bg-primary/20 ring-2 ring-primary/50 scale-110 shadow-gold-sm"
+                            ? "border-primary bg-primary/20 ring-2 ring-primary/50 scale-110 shadow-sm"
                             : barberFilter !== null
                               ? "border-border/40 opacity-40 hover:opacity-100 hover:border-primary/60 grayscale-[40%] hover:grayscale-0"
                               : "border-border/60 bg-background/50 hover:border-primary/80 hover:scale-105"
                             }`}
                           title={isSelected ? `Filtrando por ${barb.name} (Clique para ver todos)` : `Filtrar agenda de ${barb.name}`}
                         >
-                          <div className="w-10 h-10 md:w-11 md:h-11 rounded-full overflow-hidden border border-gold-subtle shadow-xs bg-background flex items-center justify-center shrink-0">
+                          <div className="w-10 h-10 md:w-11 md:h-11 rounded-full overflow-hidden border border-border shadow-xs bg-background flex items-center justify-center shrink-0">
                             {barberPhoto ? (
                               <img src={barberPhoto} alt={barb.name} className="w-full h-full object-cover" />
                             ) : (
@@ -884,7 +780,7 @@ export default function Agenda() {
                       key={`cell-${idx}`}
                       onClick={() => handleDayClick(cell.date)}
                       className={`min-h-[70px] lg:min-h-0 lg:h-full border rounded-2xl p-2.5 hover:border-primary/50 transition-all cursor-pointer flex flex-col justify-between group select-none ${isSelected
-                        ? "bg-primary/5 border-primary shadow-gold-sm"
+                        ? "bg-primary/5 border-primary shadow-sm"
                         : isToday
                           ? "bg-muted/30 border-primary/50"
                           : cell.isCurrentMonth
@@ -923,7 +819,7 @@ export default function Agenda() {
                                 className="relative group/avatar"
                                 title={`${bSum.barber_name}: ${bSum.count} agendamento(s)`}
                               >
-                                <div className="w-[48px] h-[48px] rounded-full overflow-hidden border-2 border-gold-subtle shadow-md bg-background/80 flex items-center justify-center shrink-0">
+                                <div className="w-[48px] h-[48px] rounded-full overflow-hidden border-2 border-border shadow-md bg-background/80 flex items-center justify-center shrink-0">
                                   {barberPhoto ? (
                                     <img src={barberPhoto} alt={bSum.barber_name} className="w-full h-full object-cover" />
                                   ) : (
@@ -998,7 +894,7 @@ export default function Agenda() {
                   <button
                     type="button"
                     onClick={handleOpenNewAppointmentModal}
-                    className="inline-flex items-center justify-center gap-1.5 bg-gold-gradient text-primary-foreground font-bold h-10 rounded-xl px-4 text-xs uppercase tracking-wider shadow-gold hover:shadow-gold-lg hover:-translate-y-0.5 transition-all duration-300 cursor-pointer"
+                    className="btn-primary inline-flex items-center justify-center gap-1.5 h-10 rounded-xl px-4 text-xs uppercase tracking-wider cursor-pointer"
                     title="Novo Agendamento"
                   >
                     <Plus size={14} />
@@ -1080,7 +976,7 @@ export default function Agenda() {
                           <div key={appt.id} className="animate-scale-in">
                             <div
                               onClick={() => handleEditAppointmentClick(appt)}
-                              className={`glass-card border border-border/70 rounded-2xl p-4 hover:border-primary/60 transition-all duration-300 relative overflow-hidden flex flex-col justify-between cursor-pointer group hover:shadow-gold-sm ${isStruckThrough ? "opacity-65 bg-destructive/5 border-destructive/30" : ""
+                              className={`glass-card border border-border/70 rounded-2xl p-4 hover:border-primary/60 transition-all duration-300 relative overflow-hidden flex flex-col justify-between cursor-pointer group hover:shadow-sm ${isStruckThrough ? "opacity-65 bg-destructive/5 border-destructive/30" : ""
                                 }`}
                               title="Clique para editar ou cancelar este agendamento"
                             >
@@ -1121,7 +1017,7 @@ export default function Agenda() {
 
                               <div className="flex items-center justify-between mt-3 pt-2 border-t border-border/40 gap-3 flex-wrap">
                                 <div className="flex items-center gap-1.5">
-                                  <div className="w-8 h-8 rounded-full overflow-hidden border border-gold-subtle shadow-xs bg-background/50 flex items-center justify-center shrink-0">
+                                  <div className="w-8 h-8 rounded-full overflow-hidden border border-border shadow-xs bg-background/50 flex items-center justify-center shrink-0">
                                     {barberImg ? (
                                       <img src={barberImg} alt={appt.barber_name} className="w-full h-full object-cover" />
                                     ) : (
@@ -1270,10 +1166,10 @@ export default function Agenda() {
                 <button
                   type="submit"
                   disabled={newCustomerSubmitting}
-                  className="flex-1 py-2.5 bg-gold-gradient text-primary-foreground text-xs uppercase tracking-wider font-bold rounded-xl shadow-gold hover:shadow-gold-md transition-all cursor-pointer disabled:opacity-50"
+                  className="btn-primary flex-1 py-2.5 cursor-pointer disabled:opacity-50"
                 >
                   {newCustomerSubmitting ? (
-                    <div className="w-4 h-4 border-2 border-primary-foreground border-t-transparent rounded-full animate-spin mx-auto"></div>
+                    <div className="w-4 h-4 border-2 border-background border-t-transparent rounded-full animate-spin mx-auto"></div>
                   ) : (
                     "Salvar e Selecionar"
                   )}
@@ -1330,9 +1226,9 @@ export default function Agenda() {
                         }
                       }}
                       placeholder="Digite o nome para buscar"
-                      className="w-full bg-background border border-border focus:border-primary rounded-xl py-3 pl-9 pr-4 text-sm text-foreground focus:outline-none transition-all"
+                      className="w-full bg-background border border-border focus:border-primary rounded-xl py-3 pl-10 pr-4 text-sm text-foreground focus:outline-none transition-all"
                     />
-                    <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/60" />
+                    <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/60 pointer-events-none" />
                   </div>
 
                   {/* Dropdown Autocomplete de Clientes (Exibe apenas ao digitar) */}
@@ -1504,12 +1400,12 @@ export default function Agenda() {
                           disabled={isDisabled}
                           onClick={() => setSelectedTime(time)}
                           className={`py-2 text-xs font-bold rounded-xl border transition-all text-center ${isSelected
-                            ? "bg-primary border-primary text-background shadow-gold scale-102 cursor-pointer"
+                            ? "bg-foreground border-foreground text-background shadow-sm scale-102 cursor-pointer"
                             : isBooked
                               ? "bg-destructive/10 border-destructive/20 text-destructive/60 line-through cursor-not-allowed"
                               : isPast
                                 ? "bg-background/20 border-border/10 text-muted-foreground/30 cursor-not-allowed"
-                                : "bg-background border-border text-foreground hover:border-primary/50 cursor-pointer"
+                                : "bg-background border-border text-foreground hover:border-foreground/50 cursor-pointer"
                             }`}
                           title={
                             isBooked
@@ -1613,10 +1509,10 @@ export default function Agenda() {
                 <button
                   type="submit"
                   disabled={submitLoading || !selectedTime || !selectedBarber || selectedServices.length === 0}
-                  className="flex-1 py-3 px-4 bg-gold-gradient text-black text-xs uppercase tracking-wider font-bold rounded-xl shadow-gold-sm hover:shadow-gold-md transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                  className="btn-primary flex-1 py-3 px-4 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
                 >
                   {submitLoading ? (
-                    <div className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin"></div>
+                    <div className="w-4 h-4 border-2 border-background border-t-transparent rounded-full animate-spin"></div>
                   ) : editingAppointmentId ? (
                     "Salvar Alterações"
                   ) : (

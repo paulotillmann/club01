@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
-import { useAuth, API_URL } from "../context/AuthContext.jsx"
+import { useAuth } from "../context/AuthContext.jsx"
+import { usersApi } from "../lib/api.js"
+import { supabase } from "../lib/supabase.js"
 import { User, Lock, Save, AlertTriangle, CheckCircle2, Eye, EyeOff } from "lucide-react"
 import Sidebar from "../components/Sidebar.jsx"
 
@@ -24,7 +26,7 @@ const formatPhoneNumber = (value) => {
 }
 
 export default function MeuPerfil() {
-  const { user, token, updateUserSession } = useAuth()
+  const { user, updateUserSession } = useAuth()
   const navigate = useNavigate()
 
   const [name, setName] = useState("")
@@ -88,28 +90,25 @@ export default function MeuPerfil() {
     }
 
     try {
-      const response = await fetch(`${API_URL}/api/auth/me`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          name: name.trim(),
-          phone: phone.trim(),
-          email: email.trim(),
-          currentPassword,
-          newPassword
-        })
-      })
+      const updateData = {
+        name: name.trim(),
+        phone: phone.trim(),
+        email: email.trim()
+      }
 
-      const data = await response.json()
-      if (!response.ok) {
-        throw new Error(data.error || "Erro ao atualizar dados do perfil.")
+      await usersApi.update(user.id, updateData)
+
+      if (newPassword) {
+        const { error: pwdError } = await supabase.auth.updateUser({
+          password: newPassword
+        })
+        if (pwdError) {
+          throw new Error(`Dados salvos, mas erro ao alterar senha: ${pwdError.message}`)
+        }
       }
 
       if (updateUserSession) {
-        updateUserSession(data.user, data.token)
+        updateUserSession(updateData)
       }
 
       setSuccessMessage("Dados do seu perfil foram atualizados com sucesso!")
@@ -143,7 +142,7 @@ export default function MeuPerfil() {
         <div className="bg-card/40 backdrop-blur-sm border border-border/80 rounded-2xl p-6 md:p-8 shadow-elevated relative overflow-hidden">
           
           <div className="flex items-center gap-3 border-b border-border/80 pb-4 mb-6">
-            <div className="w-12 h-12 rounded-full bg-gold-gradient/10 border border-primary/30 flex items-center justify-center text-primary shrink-0">
+            <div className="w-12 h-12 rounded-full bg-muted border border-border flex items-center justify-center text-foreground shrink-0">
               <User size={24} />
             </div>
             <div>
@@ -296,10 +295,10 @@ export default function MeuPerfil() {
               <button
                 type="submit"
                 disabled={submitting}
-                className="inline-flex items-center justify-center gap-2 bg-gold-gradient text-primary-foreground font-bold h-12 px-8 rounded-xl text-xs uppercase tracking-wider shadow-gold hover:shadow-gold-lg hover:-translate-y-0.5 transition-all duration-300 cursor-pointer disabled:opacity-50"
+                className="btn-primary inline-flex items-center justify-center gap-2 h-12 px-8 rounded-xl text-xs uppercase tracking-wider cursor-pointer disabled:opacity-50"
               >
                 {submitting ? (
-                  <div className="w-5 h-5 border-2 border-primary-foreground border-t-transparent rounded-full animate-spin"></div>
+                  <div className="w-5 h-5 border-2 border-background border-t-transparent rounded-full animate-spin"></div>
                 ) : (
                   <>
                     <Save size={16} /> Salvar Perfil

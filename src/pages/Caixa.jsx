@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react"
 import { useNavigate } from "react-router-dom"
-import { useAuth, API_URL } from "../context/AuthContext.jsx"
+import { useAuth } from "../context/AuthContext.jsx"
+import { caixaApi, barbersApi, productsApi, salesApi } from "../lib/api.js"
 import { 
   Wallet, 
   TrendingUp, 
@@ -56,7 +57,7 @@ function formatCurrency(val) {
 }
 
 export default function Caixa() {
-  const { user, token } = useAuth()
+  const { user } = useAuth()
   const navigate = useNavigate()
 
   const [transactions, setTransactions] = useState([])
@@ -112,42 +113,23 @@ export default function Caixa() {
   const [selectedAppointmentForSale, setSelectedAppointmentForSale] = useState(null)
 
   const loadData = useCallback(async () => {
-    if (!token) return
     setLoading(true)
     setError("")
     try {
-      // 1. Carregar Caixa
-      const res = await fetch(`${API_URL}/api/caixa`, {
-        headers: { Authorization: `Bearer ${token}` }
-      })
-      if (!res.ok) {
-        const data = await res.json()
-        throw new Error(data.error || "Erro ao carregar dados do caixa.")
-      }
-      const data = await res.json()
-      setTransactions(data.transactions || [])
-
-      // 2. Carregar Barbeiros (para associação em despesas/comissões ou filtros)
-      const bRes = await fetch(`${API_URL}/api/barbers`)
-      if (bRes.ok) {
-        const bData = await bRes.json()
-        setBarbers(bData || [])
-      }
-
-      // 3. Carregar Produtos para autocomplete de vendas
-      const pRes = await fetch(`${API_URL}/api/products`, {
-        headers: { Authorization: `Bearer ${token}` }
-      })
-      if (pRes.ok) {
-        const pData = await pRes.json()
-        setProducts(Array.isArray(pData) ? pData : [])
-      }
+      const [cData, bData, pData] = await Promise.all([
+        caixaApi.getAll(),
+        barbersApi.getAll().catch(() => []),
+        productsApi.getAll().catch(() => [])
+      ])
+      setTransactions(cData || [])
+      setBarbers(bData || [])
+      setProducts(pData || [])
     } catch (err) {
-      setError(err.message)
+      setError(err.message || "Erro ao carregar dados do caixa.")
     } finally {
       setLoading(false)
     }
-  }, [token])
+  }, [])
 
   const handleOpenSaleModal = async (transaction) => {
     setError("")
@@ -156,13 +138,8 @@ export default function Caixa() {
       saleId = transaction.id.replace("caixa-sale-", "")
     } else if (transaction.appointment_id) {
       try {
-        const sRes = await fetch(`${API_URL}/api/sales/appointment/${transaction.appointment_id}`, {
-          headers: { Authorization: `Bearer ${token}` }
-        })
-        if (sRes.ok) {
-          const sData = await sRes.json()
-          if (sData && sData.id) saleId = sData.id
-        }
+        const sData = await salesApi.getByAppointment(transaction.appointment_id).catch(() => null)
+        if (sData && sData.id) saleId = sData.id
       } catch (err) {
         console.error("Erro ao buscar venda associada:", err)
       }
@@ -174,13 +151,7 @@ export default function Caixa() {
     }
 
     try {
-      const res = await fetch(`${API_URL}/api/sales/${saleId}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      })
-      if (!res.ok) {
-        throw new Error("Venda não encontrada.")
-      }
-      const saleData = await res.json()
+      const saleData = await salesApi.get(saleId)
       if (!saleData) {
         throw new Error("Venda não encontrada.")
       }
@@ -188,9 +159,9 @@ export default function Caixa() {
       setSelectedSale(saleData)
       setSelectedAppointmentForSale({
         id: saleData.appointment_id || transaction.appointment_id || null,
-        client_name: saleData.client_name || "Cliente",
+        client_name: saleData.customer_name || "Cliente",
         client_id: saleData.customer_id || null,
-        appointment_time: saleData.appointment_time || transaction.date || ""
+        appointment_time: saleData.created_at || transaction.date || ""
       })
       setIsSaleModalOpen(true)
     } catch (err) {
@@ -199,22 +170,17 @@ export default function Caixa() {
   }
 
   const handleSaveSale = async (salePayload) => {
-    const url = salePayload.id ? `${API_URL}/api/sales/${salePayload.id}` : `${API_URL}/api/sales`
-    const method = salePayload.id ? "PUT" : "POST"
-
-    const res = await fetch(url, {
-      method,
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`
-      },
-      body: JSON.stringify(salePayload)
-    })
-
-    const data = await res.json()
-    if (!res.ok) {
-      throw new Error(data.error || "Erro ao salvar a venda.")
+    if (salePayload.id) {
+      await salesApi.delete(salePayload.id).catch(() => {})
     }
+
+    await salesApi.createAtomic({
+      appointmentId: salePayload.appointment_id,
+      customerId: salePayload.customer_id,
+      paymentMethod: salePayload.payment_method,
+      items: salePayload.items,
+      registerInCaixa: salePayload.sync_caixa !== false
+    })
 
     setSuccess("Venda atualizada com sucesso! Alterações sincronizadas no caixa e agendamentos.")
     setTimeout(() => setSuccess(""), 5000)
@@ -222,16 +188,7 @@ export default function Caixa() {
   }
 
   const handleDeleteSale = async (saleId) => {
-    const res = await fetch(`${API_URL}/api/sales/${saleId}`, {
-      method: "DELETE",
-      headers: { Authorization: `Bearer ${token}` }
-    })
-
-    const data = await res.json()
-    if (!res.ok) {
-      throw new Error(data.error || "Erro ao excluir a venda.")
-    }
-
+    await salesApi.delete(saleId)
     setSuccess("Venda e lançamento de caixa excluídos com sucesso!")
     setTimeout(() => setSuccess(""), 5000)
     await loadData()
@@ -250,14 +207,7 @@ export default function Caixa() {
     setError("")
     setSuccess("")
     try {
-      const res = await fetch(`${API_URL}/api/caixa/sync`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` }
-      })
-      const data = await res.json()
-      if (!res.ok) {
-        throw new Error(data.error || "Erro ao sincronizar agendamentos.")
-      }
+      const data = await caixaApi.sync()
       setSuccess(
         data.synced_count > 0
           ? `${data.synced_count} receita(s) de agendamento(s) sincronizada(s) com sucesso!`
@@ -374,21 +324,10 @@ export default function Caixa() {
     }
 
     try {
-      const url = editingId ? `${API_URL}/api/caixa/${editingId}` : `${API_URL}/api/caixa`
-      const method = editingId ? "PUT" : "POST"
-
-      const res = await fetch(url, {
-        method,
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify(payload)
-      })
-
-      const data = await res.json()
-      if (!res.ok) {
-        throw new Error(data.error || "Erro ao salvar lançamento.")
+      if (editingId) {
+        await caixaApi.update(editingId, payload)
+      } else {
+        await caixaApi.create(payload)
       }
 
       setSuccess(editingId ? "Lançamento atualizado com sucesso!" : "Lançamento registrado com sucesso!")
@@ -398,7 +337,7 @@ export default function Caixa() {
       resetForm()
       await loadData()
     } catch (err) {
-      setError(err.message)
+      setError(err.message || "Erro ao salvar lançamento.")
     } finally {
       setFormSubmitting(false)
     }
@@ -416,21 +355,13 @@ export default function Caixa() {
     setError("")
     setSuccess("")
     try {
-      const res = await fetch(`${API_URL}/api/caixa/${id}`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` }
-      })
-
-      if (!res.ok) {
-        const data = await res.json()
-        throw new Error(data.error || "Erro ao excluir lançamento.")
-      }
+      await caixaApi.delete(id)
 
       setSuccess("Lançamento excluído com sucesso!")
       setTimeout(() => setSuccess(""), 5000)
       await loadData()
     } catch (err) {
-      setError(err.message)
+      setError(err.message || "Erro ao excluir lançamento.")
     }
   }
 
@@ -598,7 +529,7 @@ export default function Caixa() {
                 <Wallet className="text-primary w-7 h-7" /> Fluxo de Caixa
               </h2>
               <p className="text-sm text-muted-foreground">
-                Controle financeiro completo da Barbearia Do Vale. Lançamentos de receitas de serviços e despesas operacionais.
+                Controle financeiro completo do CLUB 01 Barber Studio. Lançamentos de receitas de serviços e despesas operacionais.
               </p>
             </div>
 
@@ -622,7 +553,7 @@ export default function Caixa() {
 
               <button
                 onClick={() => handleOpenNewModal("receita")}
-                className="flex items-center justify-center gap-2 bg-gold-gradient hover:shadow-gold-sm text-black font-bold text-xs uppercase tracking-wider py-3 px-5 rounded-xl transition-all cursor-pointer shadow-sm"
+                className="btn-primary py-3 px-5 flex items-center justify-center gap-2 cursor-pointer shadow-sm"
               >
                 <Plus size={15} /> Nova Receita
               </button>
@@ -723,7 +654,7 @@ export default function Caixa() {
 
             {/* Card Saldo Líquido */}
             <div className={`bg-muted/30 border rounded-2xl p-5 relative overflow-hidden group shadow-sm flex flex-col justify-between ${
-              filteredSummary.saldo >= 0 ? "border-gold-subtle" : "border-destructive/40"
+              filteredSummary.saldo >= 0 ? "border-border" : "border-destructive/40"
             }`}>
               <div>
                 <div className="flex items-center justify-between mb-3">
@@ -752,13 +683,13 @@ export default function Caixa() {
           <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-4 mb-6 pt-4 border-t border-border/40">
             {/* Campo de Busca por Texto */}
             <div className="relative flex-1">
-              <Search size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <Search size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
               <input
                 type="text"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 placeholder="Buscar por descrição, categoria, cliente ou barbeiro..."
-                className="w-full bg-background border border-border focus:border-primary rounded-xl py-2.5 pl-10 pr-4 text-sm text-foreground focus:outline-none transition-all"
+                className="w-full bg-background border border-border focus:border-primary rounded-xl py-2.5 pl-11 pr-10 text-sm text-foreground focus:outline-none transition-all"
               />
               {searchTerm && (
                 <button
@@ -794,7 +725,7 @@ export default function Caixa() {
                           "/assets/neto-barber.jpeg"
                         )
                         return (
-                          <div className="w-6 h-6 rounded-full overflow-hidden border border-gold-subtle shrink-0 bg-background flex items-center justify-center">
+                          <div className="w-6 h-6 rounded-full overflow-hidden border border-border shrink-0 bg-background flex items-center justify-center">
                             {photo ? (
                               <img src={photo} alt={selectedBarber?.name} className="w-full h-full object-cover" />
                             ) : (
@@ -971,7 +902,7 @@ export default function Caixa() {
                             }}
                             className={`py-2 px-3 text-xs font-bold rounded-xl text-center transition-all cursor-pointer ${
                               isSelected
-                                ? "bg-primary text-background font-black shadow-gold scale-105"
+                                ? "bg-foreground text-background font-black shadow-sm scale-105"
                                 : "bg-muted/20 hover:bg-muted/50 text-foreground/80 hover:text-foreground border border-transparent hover:border-border/40"
                             }`}
                           >
@@ -1168,7 +1099,7 @@ export default function Caixa() {
                             {(t.id?.startsWith("caixa-sale-") || t.category === "Venda de Produtos") && (
                               <button
                                 onClick={() => handleOpenSaleModal(t)}
-                                className="p-1.5 rounded-lg bg-gold-gradient/10 border border-gold-subtle/40 hover:bg-gold-gradient hover:text-black text-primary transition-all cursor-pointer shadow-xs"
+                                className="p-1.5 rounded-lg bg-card border border-border hover:bg-muted text-foreground transition-all cursor-pointer shadow-xs"
                                 title="Ver / Editar Informações da Venda"
                               >
                                 <ShoppingBag size={13} />
@@ -1439,10 +1370,10 @@ export default function Caixa() {
                 <button
                   type="submit"
                   disabled={formSubmitting}
-                  className="flex-1 py-3 px-4 bg-gold-gradient text-black text-xs uppercase tracking-wider font-bold rounded-xl shadow-gold-sm hover:shadow-gold-md transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                  className="btn-primary flex-1 py-3 px-4 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
                 >
                   {formSubmitting ? (
-                    <div className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin"></div>
+                    <div className="w-4 h-4 border-2 border-background border-t-transparent rounded-full animate-spin"></div>
                   ) : editingId ? "Salvar Alterações" : "Registrar Lançamento"}
                 </button>
               </div>

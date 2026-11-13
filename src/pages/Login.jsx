@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react"
 import { useNavigate, useLocation } from "react-router-dom"
 import { useAuth } from "../context/AuthContext.jsx"
 import { LogIn, UserPlus, Phone, Lock, User, AlertCircle, CheckCircle2, ArrowLeft, Mail, Eye, EyeOff } from "lucide-react"
+import Logo from "../components/Logo.jsx"
 
 export default function Login() {
   const { user, login, register, logout } = useAuth()
@@ -140,15 +141,11 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen bg-transparent flex flex-col justify-center items-center px-4 relative pt-20">
-      {/* Background elements */}
-      <div className="absolute top-1/4 left-1/4 w-72 h-72 bg-primary/5 rounded-full blur-[100px]"></div>
-      <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-accent/5 rounded-full blur-[120px]"></div>
-      
+    <div className="min-h-screen bg-background text-foreground flex flex-col justify-center items-center px-4 relative py-20">
       {/* Back Button */}
       <button 
         onClick={() => navigate("/")}
-        className="absolute top-24 left-4 md:left-10 flex items-center gap-2 text-muted-foreground hover:text-primary transition-colors cursor-pointer text-sm font-medium"
+        className="absolute top-20 left-4 md:left-10 inline-flex items-center gap-2 min-h-[44px] px-3.5 rounded-xl border border-border bg-card/80 text-foreground hover:bg-muted transition-colors cursor-pointer text-xs font-semibold"
       >
         <ArrowLeft size={16} /> Voltar para o início
       </button>
@@ -156,77 +153,79 @@ export default function Login() {
       <div className="w-full max-w-md z-10">
         {/* Header Logo */}
         <div className="flex flex-col items-center mb-8">
-          <img src="/assets/logo-nova-sem-borda.png" alt="Barbearia Do Vale" className="h-[152px] md:h-[200px] w-auto object-contain mb-4" />
-          <h2 className="text-2xl font-bold font-display tracking-wide uppercase">
+          <div className="mb-4">
+            <Logo size="lg" showText={false} className="" />
+          </div>
+          <h1 className="text-3xl md:text-4xl font-bold font-display tracking-tight uppercase text-foreground">
             {isRegister ? "Criar sua Conta" : "Acesse sua Conta"}
-          </h2>
-          <p className="text-muted-foreground text-sm mt-1 text-center">
+          </h1>
+          <p className="text-muted-foreground text-sm mt-1 text-center font-medium">
             {isRegister 
-              ? "Cadastre-se para agendar seu corte na melhor de Araguari" 
-              : "Entre para gerenciar seus agendamentos e horários"}
+              ? "Cadastre-se para gerenciar seus horários no CLUB 01" 
+              : "Entre para acessar o sistema de gestão do studio"}
           </p>
         </div>
 
         {/* Card Form */}
-        <div className="glass-card rounded-2xl border border-gold-subtle p-8 shadow-elevated">
+        <div className="club-card p-6 sm:p-8">
           {error && (
-            <div className="flex items-center gap-3 bg-destructive/10 border border-destructive/20 text-destructive text-sm rounded-xl p-4 mb-6 animate-fade-in">
+            <div className="flex items-center gap-3 bg-destructive/10 border border-destructive/20 text-destructive text-sm rounded-xl p-4 mb-6">
               <AlertCircle size={20} className="shrink-0" />
-              <span>{error}</span>
+              <span className="font-medium">{error}</span>
             </div>
           )}
 
           {successMessage && (
-            <div className="flex items-center gap-3 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-sm rounded-xl p-4 mb-6 animate-fade-in">
+            <div className="flex items-center gap-3 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-sm rounded-xl p-4 mb-6">
               <CheckCircle2 size={20} className="shrink-0 text-emerald-400" />
-              <span>{successMessage}</span>
+              <span className="font-medium">{successMessage}</span>
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-6">
+          <form onSubmit={handleSubmit} className="space-y-5">
             {isRegister ? (
               // CAMPOS DE CADASTRO
               <>
                 <div className="space-y-2">
-                  <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Nome Completo</label>
+                  <label className="text-xs font-semibold uppercase tracking-wider text-foreground">Nome Completo</label>
                   <div className="relative">
-                    <User className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground w-5 h-5" />
+                    <User className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground w-5 h-5 pointer-events-none" />
                     <input
                       type="text"
                       required
                       value={name}
                       onChange={(e) => setName(e.target.value)}
-                      placeholder="Ex: Manoel Neto"
-                      className="w-full bg-background/50 border border-border focus:border-primary rounded-xl py-3.5 pl-12 pr-4 text-foreground placeholder-muted-foreground focus:outline-none transition-all duration-300"
+                      placeholder="Ex: Paulo Tillmann"
+                      className="club-input w-full pl-12"
                     />
                   </div>
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Telefone / WhatsApp</label>
+                  <label className="text-xs font-semibold uppercase tracking-wider text-foreground">Telefone / WhatsApp</label>
                   <div className="relative">
-                    <Phone className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground w-5 h-5" />
+                    <Phone className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground w-5 h-5 pointer-events-none" />
                     <input
                       type="text"
                       required
                       value={phone}
                       onChange={handlePhoneChange}
-                      placeholder="(84) 99999-9999"
-                      className="w-full bg-background/50 border border-border focus:border-primary rounded-xl py-3.5 pl-12 pr-4 text-foreground placeholder-muted-foreground focus:outline-none transition-all duration-300"
+                      placeholder="(34) 99999-9999"
+                      className="club-input w-full pl-12"
                     />
                   </div>
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">E-mail (Opcional)</label>
+                  <label className="text-xs font-semibold uppercase tracking-wider text-foreground">E-mail (Opcional)</label>
                   <div className="relative">
-                    <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground w-5 h-5" />
+                    <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground w-5 h-5 pointer-events-none" />
                     <input
                       type="email"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      placeholder="Ex: paulogtillmann@gmail.com"
-                      className="w-full bg-background/50 border border-border focus:border-primary rounded-xl py-3.5 pl-12 pr-4 text-foreground placeholder-muted-foreground focus:outline-none transition-all duration-300"
+                      placeholder="seu.email@exemplo.com"
+                      className="club-input w-full pl-12"
                     />
                   </div>
                 </div>
@@ -234,32 +233,32 @@ export default function Login() {
             ) : (
               // CAMPOS DE LOGIN
               <div className="space-y-2">
-                <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">E-mail ou Telefone</label>
+                <label className="text-xs font-semibold uppercase tracking-wider text-foreground">E-mail ou Telefone</label>
                 <div className="relative">
-                  <User className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground w-5 h-5" />
+                  <User className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground w-5 h-5 pointer-events-none" />
                   <input
                     type="text"
                     required
                     value={loginKey}
                     onChange={(e) => setLoginKey(e.target.value)}
-                    placeholder="Ex: paulogtillmann@gmail.com ou (84) 99999-9999"
-                    className="w-full bg-background/50 border border-border focus:border-primary rounded-xl py-3.5 pl-12 pr-4 text-foreground placeholder-muted-foreground focus:outline-none transition-all duration-300"
+                    placeholder="E-mail ou telefone"
+                    className="club-input w-full pl-12"
                   />
                 </div>
               </div>
             )}
 
             <div className="space-y-2">
-              <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Senha</label>
+              <label className="text-xs font-semibold uppercase tracking-wider text-foreground">Senha</label>
               <div className="relative">
-                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground w-5 h-5" />
+                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground w-5 h-5 pointer-events-none" />
                 <input
                   type={showPassword ? "text" : "password"}
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
-                  className="w-full bg-background/50 border border-border focus:border-primary rounded-xl py-3.5 pl-12 pr-12 text-foreground placeholder-muted-foreground focus:outline-none transition-all duration-300"
+                  className="club-input w-full pl-12 pr-12"
                 />
                 <button
                   type="button"
@@ -279,14 +278,14 @@ export default function Login() {
                     type="checkbox"
                     checked={rememberMe}
                     onChange={(e) => setRememberMe(e.target.checked)}
-                    className="accent-primary w-4 h-4 rounded border-border bg-background focus:ring-primary focus:ring-opacity-25"
+                    className="accent-foreground w-4 h-4 rounded border-border"
                   />
                   <span>Lembrar de mim</span>
                 </label>
                 <button
                   type="button"
                   onClick={() => navigate("/reset-password")}
-                  className="text-xs text-primary hover:text-accent font-semibold transition-colors cursor-pointer"
+                  className="text-xs text-foreground hover:underline font-semibold transition-colors cursor-pointer"
                 >
                   Esqueci minha senha
                 </button>
@@ -296,7 +295,7 @@ export default function Login() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full inline-flex items-center justify-center gap-2.5 bg-gold-gradient text-primary-foreground font-semibold shadow-gold hover:shadow-gold-lg hover:-translate-y-0.5 active:translate-y-0 h-14 rounded-xl text-base transition-all duration-500 cursor-pointer disabled:opacity-50 disabled:pointer-events-none"
+              className="btn-primary w-full h-14 text-base"
             >
               {loading ? (
                 <div className="w-5 h-5 border-2 border-primary-foreground border-t-transparent rounded-full animate-spin"></div>
@@ -313,7 +312,7 @@ export default function Login() {
           </form>
 
           {/* Toggle Login/Register */}
-          <div className="mt-8 text-center text-sm border-t border-border/50 pt-6">
+          <div className="mt-6 text-center text-sm border-t border-border pt-5">
             <span className="text-muted-foreground">
               {isRegister ? "Já possui uma conta?" : "Ainda não tem conta?"}{" "}
             </span>
@@ -323,7 +322,7 @@ export default function Login() {
                 setError("")
                 setSuccessMessage("")
               }}
-              className="text-primary hover:text-accent font-semibold transition-colors cursor-pointer"
+              className="text-foreground font-bold hover:underline transition-colors cursor-pointer"
             >
               {isRegister ? "Fazer Login" : "Cadastrar-se agora"}
             </button>
@@ -333,3 +332,4 @@ export default function Login() {
     </div>
   )
 }
+

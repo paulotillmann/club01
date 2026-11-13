@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
-import { useAuth, API_URL } from "../context/AuthContext.jsx"
-import { Settings, ShieldAlert, AlertTriangle, CheckCircle2, Pencil, Trash2, MessageSquare, Clock } from "lucide-react"
+import { useAuth } from "../context/AuthContext.jsx"
+import { settingsApi, usersApi, whatsappLogsApi, whatsappConfigApi } from "../lib/api.js"
+import { Settings, ShieldAlert, AlertTriangle, CheckCircle2, Pencil, Trash2, MessageSquare, Clock, ShieldCheck, Smartphone } from "lucide-react"
 import Sidebar from "../components/Sidebar.jsx"
 
 export default function Configuracoes() {
-  const { user, token } = useAuth()
+  const { user } = useAuth()
   const navigate = useNavigate()
 
   const [userList, setUserList] = useState([])
@@ -31,14 +32,21 @@ export default function Configuracoes() {
     onConfirm: null
   })
 
-  // WhatsApp Logs states
+  // WhatsApp Logs & Config states
   const [whatsappLogs, setWhatsappLogs] = useState([])
+  const [whatsappConfig, setWhatsappConfig] = useState({
+    instance_name: "Meu Bolso Digital",
+    dry_run: true,
+    enabled: false,
+    reminder_lead_minutes: 30,
+    counts: { pending: 0, sent: 0, simulated: 0, failed: 0 }
+  })
   const [logsLoading, setLogsLoading] = useState(false)
   const [logsStatusFilter, setLogsStatusFilter] = useState("")
   const [logsTypeFilter, setLogsTypeFilter] = useState("")
 
   // Configurações Gerais states
-  const [shopName, setShopName] = useState(() => localStorage.getItem("shopName") || "Barbearia Do Vale")
+  const [shopName, setShopName] = useState(() => localStorage.getItem("shopName") || "CLUB 01 Barber Studio")
   const [shopAddress, setShopAddress] = useState(() => localStorage.getItem("shopAddress") || "Av. Senador Melo Viana, 709 - Goiás, Araguari/MG")
   const [shopPhone, setShopPhone] = useState(() => localStorage.getItem("shopPhone") || "(34) 99868-4036")
   const [shopOpenHours, setShopOpenHours] = useState(() => localStorage.getItem("shopOpenHours") || "Seg - Sex: 09:00 - 20:00 | Sábado: 08:00 - 19:00")
@@ -59,34 +67,31 @@ export default function Configuracoes() {
 
     async function loadSettings() {
       try {
-        const response = await fetch(`${API_URL}/api/settings`)
-        if (response.ok) {
-          const data = await response.json()
-          if (data) {
-            if (data.min_lead_time_minutes !== undefined) {
-              setMinLeadTimeMinutes(String(data.min_lead_time_minutes))
-              localStorage.setItem("minLeadTimeMinutes", String(data.min_lead_time_minutes))
-            }
-            if (data.shop_name) {
-              setShopName(data.shop_name)
-              localStorage.setItem("shopName", data.shop_name)
-            }
-            if (data.shop_address) {
-              setShopAddress(data.shop_address)
-              localStorage.setItem("shopAddress", data.shop_address)
-            }
-            if (data.shop_phone) {
-              setShopPhone(data.shop_phone)
-              localStorage.setItem("shopPhone", data.shop_phone)
-            }
-            if (data.shop_open_hours) {
-              setShopOpenHours(data.shop_open_hours)
-              localStorage.setItem("shopOpenHours", data.shop_open_hours)
-            }
-            if (data.inactivity_minutes) {
-              setInactivityMinutes(String(data.inactivity_minutes))
-              localStorage.setItem("inactivityMinutes", String(data.inactivity_minutes))
-            }
+        const data = await settingsApi.get()
+        if (data) {
+          if (data.min_lead_time_minutes !== undefined) {
+            setMinLeadTimeMinutes(String(data.min_lead_time_minutes))
+            localStorage.setItem("minLeadTimeMinutes", String(data.min_lead_time_minutes))
+          }
+          if (data.shop_name) {
+            setShopName(data.shop_name)
+            localStorage.setItem("shopName", data.shop_name)
+          }
+          if (data.shop_address) {
+            setShopAddress(data.shop_address)
+            localStorage.setItem("shopAddress", data.shop_address)
+          }
+          if (data.shop_phone) {
+            setShopPhone(data.shop_phone)
+            localStorage.setItem("shopPhone", data.shop_phone)
+          }
+          if (data.shop_open_hours) {
+            setShopOpenHours(data.shop_open_hours)
+            localStorage.setItem("shopOpenHours", data.shop_open_hours)
+          }
+          if (data.inactivity_minutes) {
+            setInactivityMinutes(String(data.inactivity_minutes))
+            localStorage.setItem("inactivityMinutes", String(data.inactivity_minutes))
           }
         }
       } catch {
@@ -98,18 +103,10 @@ export default function Configuracoes() {
       setUsersLoading(true)
       setPermissionsError("")
       try {
-        const response = await fetch(`${API_URL}/api/users`, {
-          headers: { Authorization: `Bearer ${token}` }
-        })
-        if (response.ok) {
-          const data = await response.json()
-          setUserList(data)
-        } else {
-          const data = await response.json()
-          setPermissionsError(data.error || "Erro ao carregar lista de usuários.")
-        }
-      } catch {
-        setPermissionsError("Erro de conexão ao carregar usuários.")
+        const data = await usersApi.getAll()
+        setUserList(data || [])
+      } catch (err) {
+        setPermissionsError(err.message || "Erro ao carregar lista de usuários.")
       } finally {
         setUsersLoading(false)
       }
@@ -118,21 +115,17 @@ export default function Configuracoes() {
     loadSettings()
     loadUsers()
     loadWhatsappLogs("", "")
-  }, [user, token, navigate])
+  }, [user, navigate])
 
   const loadWhatsappLogs = async (statusFilter, typeFilter) => {
     setLogsLoading(true)
     try {
-      const params = new URLSearchParams()
-      if (statusFilter) params.append("status", statusFilter)
-      if (typeFilter) params.append("message_type", typeFilter)
-      const res = await fetch(`${API_URL}/api/whatsapp-logs?${params}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      })
-      if (res.ok) {
-        const data = await res.json()
-        setWhatsappLogs(data.logs || [])
-      }
+      const [logs, config] = await Promise.all([
+        whatsappLogsApi.getAll(statusFilter, typeFilter),
+        whatsappConfigApi.getStatus()
+      ])
+      setWhatsappLogs(logs || [])
+      if (config) setWhatsappConfig(config)
     } catch {
       // silently ignore log errors
     } finally {
@@ -182,19 +175,7 @@ export default function Configuracoes() {
     setPermissionsSuccess("")
     
     try {
-      const response = await fetch(`${API_URL}/api/users/${userId}/role`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({ role: newRole })
-      })
-
-      const data = await response.json()
-      if (!response.ok) {
-        throw new Error(data.error || "Erro ao atualizar cargo.")
-      }
+      await usersApi.updateRole(userId, newRole)
 
       setPermissionsSuccess(`Cargo de ${newRole.toUpperCase()} atualizado com sucesso!`)
       setTimeout(() => {
@@ -243,31 +224,19 @@ export default function Configuracoes() {
     setPermissionsSuccess("")
 
     try {
-      const res = await fetch(`${API_URL}/api/users/${editingUserId}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          name: editUserName.trim(),
-          phone: editUserPhone.trim(),
-          email: editUserEmail.trim(),
-          role: editUserRole
-        })
+      const updatedUser = await usersApi.update(editingUserId, {
+        name: editUserName.trim(),
+        phone: editUserPhone.trim(),
+        email: editUserEmail.trim(),
+        role: editUserRole
       })
-
-      const data = await res.json()
-      if (!res.ok) {
-        throw new Error(data.error || "Erro ao atualizar usuário.")
-      }
 
       setPermissionsSuccess("Usuário atualizado com sucesso!")
       setTimeout(() => {
         setPermissionsSuccess("")
       }, 5000)
 
-      setUserList(prev => prev.map(u => u.id === editingUserId ? { ...u, ...data.user } : u))
+      setUserList(prev => prev.map(u => u.id === editingUserId ? { ...u, ...updatedUser } : u))
       setIsUserModalOpen(false)
     } catch (err) {
       setUserModalError(err.message)
@@ -294,17 +263,7 @@ export default function Configuracoes() {
     setPermissionsSuccess("")
 
     try {
-      const res = await fetch(`${API_URL}/api/users/${userId}`, {
-        method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
-      })
-
-      if (!res.ok) {
-        const data = await res.json()
-        throw new Error(data.error || "Erro ao excluir usuário.")
-      }
+      await usersApi.delete(userId)
 
       setPermissionsSuccess("Usuário excluído com sucesso!")
       setTimeout(() => {
@@ -332,20 +291,13 @@ export default function Configuracoes() {
     window.dispatchEvent(new Event("storage_settings_updated"))
 
     try {
-      await fetch(`${API_URL}/api/settings`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          shop_name: shopName,
-          shop_address: shopAddress,
-          shop_phone: shopPhone,
-          shop_open_hours: shopOpenHours,
-          inactivity_minutes: inactivityMinutes || "5",
-          min_lead_time_minutes: minLeadTimeMinutes || "30"
-        })
+      await settingsApi.update({
+        shop_name: shopName,
+        shop_address: shopAddress,
+        shop_phone: shopPhone,
+        shop_open_hours: shopOpenHours,
+        inactivity_minutes: Number(inactivityMinutes) || 5,
+        min_lead_time_minutes: Number(minLeadTimeMinutes) || 30
       })
     } catch {
       // offline/error handling silencioso
@@ -495,7 +447,7 @@ export default function Configuracoes() {
                       required
                       value={shopName}
                       onChange={(e) => setShopName(e.target.value)}
-                      placeholder="Ex: Barbearia Do Vale"
+                      placeholder="Ex: CLUB 01 Barber Studio"
                       className="w-full bg-background border border-border focus:border-primary rounded-xl py-2.5 px-3 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary transition-all"
                     />
                   </div>
@@ -582,7 +534,7 @@ export default function Configuracoes() {
 
                   <button
                     type="submit"
-                    className="w-full bg-gold-gradient text-primary-foreground font-bold h-11 rounded-xl text-xs uppercase tracking-wider shadow-gold hover:shadow-gold-lg hover:-translate-y-0.5 transition-all duration-300 cursor-pointer"
+                    className="btn-primary w-full h-11 rounded-xl text-xs uppercase tracking-wider cursor-pointer"
                   >
                     Salvar Alterações
                   </button>
@@ -591,12 +543,23 @@ export default function Configuracoes() {
 
             </div>
 
-            {/* Seção: Logs de Envio WhatsApp */}
-            <div className="mt-8 pt-8 border-t border-border/60 space-y-4">
+            {/* Seção: Automação WhatsApp & Evolution API (Fase 6) */}
+            <div className="mt-8 pt-8 border-t border-border/60 space-y-6">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                <h3 className="text-sm font-bold uppercase tracking-wider text-primary flex items-center gap-2">
-                  <MessageSquare size={16} /> Logs de Envio WhatsApp
-                </h3>
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-sm font-bold uppercase tracking-wider text-primary flex items-center gap-2">
+                      <MessageSquare size={16} /> Integração WhatsApp & Evolution API
+                    </h3>
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/15 text-amber-400 border border-amber-500/30">
+                      <ShieldCheck size={12} /> DRY-RUN ATIVO
+                    </span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Fila de notificações automáticas server-side para confirmações, lembretes de 30 min, cancelamentos e remarcações.
+                  </p>
+                </div>
+
                 <div className="flex items-center gap-2">
                   <select
                     value={logsStatusFilter}
@@ -604,9 +567,12 @@ export default function Configuracoes() {
                     className="bg-background border border-border focus:border-primary rounded-lg py-1.5 px-2 text-[11px] focus:outline-none transition-all cursor-pointer"
                   >
                     <option value="">Todos os status</option>
+                    <option value="simulated">Simulado (DRY-RUN)</option>
                     <option value="sent">Enviado</option>
-                    <option value="failed">Falhou</option>
                     <option value="pending">Pendente</option>
+                    <option value="failed">Falhou</option>
+                    <option value="cancelled">Cancelado</option>
+                    <option value="skipped">Ignorado (&lt;30m)</option>
                   </select>
                   <select
                     value={logsTypeFilter}
@@ -614,30 +580,74 @@ export default function Configuracoes() {
                     className="bg-background border border-border focus:border-primary rounded-lg py-1.5 px-2 text-[11px] focus:outline-none transition-all cursor-pointer"
                   >
                     <option value="">Todos os tipos</option>
-                    <option value="confirmation">Confirmação</option>
-                    <option value="reminder">Lembrete</option>
+                    <option value="confirmation">Confirmação (Novo)</option>
+                    <option value="reminder">Lembrete (30 min)</option>
                     <option value="cancellation">Cancelamento</option>
+                    <option value="reschedule">Remarcação</option>
                   </select>
+                </div>
+              </div>
+
+              {/* Cards de Status e Resumo da Integração */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div className="bg-background/40 border border-border/80 rounded-xl p-3.5 space-y-1">
+                  <span className="text-[10px] uppercase font-bold text-muted-foreground flex items-center gap-1.5">
+                    <Smartphone size={12} className="text-primary" /> Instância Ativa
+                  </span>
+                  <p className="text-sm font-semibold text-foreground truncate">
+                    {whatsappConfig.instance_name || "Meu Bolso Digital"}
+                  </p>
+                  <span className="text-[10px] text-muted-foreground">Ambiente de testes</span>
+                </div>
+
+                <div className="bg-background/40 border border-border/80 rounded-xl p-3.5 space-y-1">
+                  <span className="text-[10px] uppercase font-bold text-muted-foreground flex items-center gap-1.5">
+                    <Clock size={12} className="text-yellow-400" /> Antecedência
+                  </span>
+                  <p className="text-sm font-semibold text-foreground">
+                    {whatsappConfig.reminder_lead_minutes || 30} minutos
+                  </p>
+                  <span className="text-[10px] text-muted-foreground">Lembrete automático cliente</span>
+                </div>
+
+                <div className="bg-background/40 border border-border/80 rounded-xl p-3.5 space-y-1">
+                  <span className="text-[10px] uppercase font-bold text-muted-foreground flex items-center gap-1.5">
+                    <CheckCircle2 size={12} className="text-blue-400" /> Simulados (DRY-RUN)
+                  </span>
+                  <p className="text-sm font-semibold text-blue-400">
+                    {whatsappConfig.counts?.simulated || 0}
+                  </p>
+                  <span className="text-[10px] text-muted-foreground">Processados com segurança</span>
+                </div>
+
+                <div className="bg-background/40 border border-border/80 rounded-xl p-3.5 space-y-1">
+                  <span className="text-[10px] uppercase font-bold text-muted-foreground flex items-center gap-1.5">
+                    <AlertTriangle size={12} className="text-destructive" /> Falhas / Alertas
+                  </span>
+                  <p className="text-sm font-semibold text-destructive">
+                    {whatsappConfig.counts?.failed || 0}
+                  </p>
+                  <span className="text-[10px] text-muted-foreground">Requer verificação</span>
                 </div>
               </div>
 
               {logsLoading ? (
                 <div className="flex flex-col items-center justify-center py-8 gap-2">
                   <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
-                  <span className="text-[10px] text-muted-foreground">Carregando logs...</span>
+                  <span className="text-[10px] text-muted-foreground">Carregando logs da fila...</span>
                 </div>
               ) : (
-                <div className="overflow-x-auto rounded-xl border border-border/80 bg-background/20 max-h-[350px] overflow-y-auto">
+                <div className="overflow-x-auto rounded-xl border border-border/80 bg-background/20 max-h-[380px] overflow-y-auto">
                   <table className="w-full text-left border-collapse text-xs">
                     <thead>
                       <tr className="border-b border-border/80 text-muted-foreground uppercase font-bold tracking-wider bg-background/45 sticky top-0 z-10">
-                        <th className="py-3 px-4">Tipo</th>
-                        <th className="py-3 px-4">Cliente</th>
+                        <th className="py-3 px-4">Evento</th>
+                        <th className="py-3 px-4">Destinatário</th>
                         <th className="py-3 px-4">Telefone</th>
-                        <th className="py-3 px-4">Serviço</th>
                         <th className="py-3 px-4">Status</th>
+                        <th className="py-3 px-4">Tentativas</th>
                         <th className="py-3 px-4">Agendamento</th>
-                        <th className="py-3 px-4">Enviado em</th>
+                        <th className="py-3 px-4">Horário Programado</th>
                         <th className="py-3 px-4">Criado em</th>
                       </tr>
                     </thead>
@@ -645,44 +655,73 @@ export default function Configuracoes() {
                       {whatsappLogs.length === 0 ? (
                         <tr>
                           <td colSpan={8} className="py-8 text-center text-muted-foreground text-xs">
-                            Nenhum log encontrado.
+                            Nenhum registro de notificação encontrado na fila.
                           </td>
                         </tr>
                       ) : whatsappLogs.map((log) => (
                         <tr key={log.id} className="border-b border-border/40 hover:bg-muted/5 transition-colors">
                           <td className="py-3 px-4">
                             <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold ${
-                              log.message_type === "confirmation"
+                              log.message_type === "confirmation" || log.event_type === "new_appointment"
                                 ? "bg-blue-500/15 text-blue-400"
-                                : log.message_type === "reminder"
+                                : log.message_type === "reminder" || log.event_type === "reminder_30m"
                                 ? "bg-yellow-500/15 text-yellow-400"
-                                : "bg-red-500/15 text-red-400"
+                                : log.message_type === "cancellation" || log.event_type === "cancellation"
+                                ? "bg-red-500/15 text-red-400"
+                                : "bg-purple-500/15 text-purple-400"
                             }`}>
-                              {log.message_type === "confirmation" ? "Confirmação"
-                                : log.message_type === "reminder" ? "Lembrete"
-                                : "Cancelamento"}
+                              {log.event_type === "new_appointment" || log.message_type === "confirmation" ? "Confirmação"
+                                : log.event_type === "reminder_30m" || log.message_type === "reminder" ? "Lembrete 30m"
+                                : log.event_type === "cancellation" || log.message_type === "cancellation" ? "Cancelamento"
+                                : "Remarcação"}
                             </span>
                           </td>
-                          <td className="py-3 px-4 font-semibold text-foreground">{log.customer_name || "—"}</td>
-                          <td className="py-3 px-4 text-foreground/80">{formatLogPhone(log.phone)}</td>
-                          <td className="py-3 px-4 text-foreground/70">{log.service_names || "—"}</td>
+                          <td className="py-3 px-4">
+                            <div className="font-semibold text-foreground">{log.customer_name || log.recipient_name || "—"}</div>
+                            {log.recipient_type && (
+                              <span className="text-[10px] text-muted-foreground uppercase font-mono">
+                                ({log.recipient_type === "client" ? "Cliente" : log.recipient_type === "barber" ? "Barbeiro" : log.recipient_type})
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-3 px-4 text-foreground/80">{formatLogPhone(log.phone || log.recipient_phone)}</td>
                           <td className="py-3 px-4">
                             <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${
                               log.status === "sent"
                                 ? "bg-green-500/15 text-green-400"
+                                : log.status === "simulated"
+                                ? "bg-blue-500/15 text-blue-400"
                                 : log.status === "failed"
                                 ? "bg-red-500/15 text-red-400"
+                                : log.status === "cancelled"
+                                ? "bg-zinc-500/20 text-zinc-400"
+                                : log.status === "skipped"
+                                ? "bg-zinc-500/20 text-zinc-400"
+                                : log.status === "unknown"
+                                ? "bg-amber-500/15 text-amber-400"
                                 : "bg-yellow-500/15 text-yellow-400"
                             }`}>
                               {log.status === "sent" ? "✓ Enviado"
+                                : log.status === "simulated" ? "⚡ Simulado (DRY-RUN)"
                                 : log.status === "failed" ? "✗ Falhou"
+                                : log.status === "cancelled" ? "⊘ Cancelado"
+                                : log.status === "skipped" ? "— Ignorado (<30m)"
+                                : log.status === "unknown" ? "? Não Confirmado"
                                 : "⏳ Pendente"}
                             </span>
+                            {log.last_error && (
+                              <p className="text-[10px] text-destructive mt-0.5 max-w-[180px] truncate" title={log.last_error}>
+                                {log.last_error}
+                              </p>
+                            )}
+                          </td>
+                          <td className="py-3 px-4 text-center font-mono text-[11px] text-foreground/80">
+                            {log.attempts || 0}
                           </td>
                           <td className="py-3 px-4 text-foreground/60 font-mono text-[10px]">
                             {log.appointment_id ? `${log.appointment_id.slice(0, 8)}...` : "—"}
                           </td>
-                          <td className="py-3 px-4 text-foreground/70">{formatLogDate(log.sent_at)}</td>
+                          <td className="py-3 px-4 text-foreground/70">{formatLogDate(log.scheduled_for || log.scheduled_time)}</td>
                           <td className="py-3 px-4 text-foreground/70">{formatLogDate(log.created_at)}</td>
                         </tr>
                       ))}
@@ -806,17 +845,17 @@ export default function Configuracoes() {
                 <button
                   type="button"
                   onClick={() => setIsUserModalOpen(false)}
-                  className="flex-1 border border-border hover:bg-muted rounded-xl h-12 font-medium transition-colors cursor-pointer text-sm"
+                  className="flex-1 border border-border hover:bg-muted rounded-xl h-12 font-medium transition-colors cursor-pointer text-sm text-foreground"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
                   disabled={userSubmitting}
-                  className="flex-1 bg-gold-gradient text-primary-foreground font-bold h-12 rounded-xl text-sm uppercase tracking-wider shadow-gold hover:shadow-gold-lg hover:-translate-y-0.5 transition-all duration-300 cursor-pointer disabled:opacity-50"
+                  className="btn-primary flex-1 h-12 rounded-xl text-sm uppercase tracking-wider cursor-pointer disabled:opacity-50"
                 >
                   {userSubmitting ? (
-                    <div className="w-5 h-5 border-2 border-primary-foreground border-t-transparent rounded-full animate-spin mx-auto"></div>
+                    <div className="w-5 h-5 border-2 border-background border-t-transparent rounded-full animate-spin mx-auto"></div>
                   ) : (
                     "Salvar Dados"
                   )}

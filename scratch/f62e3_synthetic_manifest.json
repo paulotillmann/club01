@@ -1,0 +1,31 @@
+{
+  "executedAt": "2026-10-20T03:43:17.947Z",
+  "projectRef": "mxafltrygwekefewhylh",
+  "prefix": "CLUB01_F62E3_TEST_",
+  "barbers": [
+    "CLUB01_F62E3_TEST_barber_1"
+  ],
+  "customers": [
+    "CLUB01_F62E3_TEST_cust_1"
+  ],
+  "services": [
+    "CLUB01_F62E3_TEST_srv_1"
+  ],
+  "appointments": [
+    "CLUB01_F62E3_TEST_appt_1"
+  ],
+  "notifications": [
+    "CLUB01_F62E3_TEST_notif_1",
+    "CLUB01_F62E3_TEST_notif_2"
+  ],
+  "testResults": {
+    "status": "APROVADO",
+    "functionUrl": "https://mxafltrygwekefewhylh.supabase.co/functions/v1/process-notifications",
+    "httpStatus": 200,
+    "processed": 4,
+    "dryRunActive": true,
+    "allSimulated": true,
+    "databaseVerified": true
+  },
+  "baselineMatch": true
+}

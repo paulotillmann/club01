@@ -1,6 +1,7 @@
 import React, { useState } from "react"
 import { createPortal } from "react-dom"
 import { Users, Maximize2, X, Scissors, ShoppingBag, Phone, Award, ArrowUpRight } from "lucide-react"
+import { useTheme } from "../context/ThemeContext.jsx"
 
 // Formata valores em K para >= 1000 e em reais simples para < 1000
 function formatValueK(val) {
@@ -20,30 +21,61 @@ function formatCurrency(val) {
   })
 }
 
-// Paleta degradê de 10 passos (Dourado quente -> Bronze escuro)
-const TOP_10_COLORS = [
-  "#FADD00", // #1 - Dourado vibrante / mais quente
-  "#EDCA0E", // #2
-  "#DFB71C", // #3
-  "#CFBB23", // #4
-  "#BFA72C", // #5
-  "#A59837", // #6
-  "#8F853A", // #7
-  "#7A733D", // #8
-  "#656039", // #9
-  "#504D35"  // #10 - Mais escuro
+// Paleta degradê de 10 passos monocromática (Modo Escuro: Branco -> Escala de Cinza)
+const TOP_10_COLORS_DARK = [
+  "#FFFFFF", // #1 - Branco puro
+  "#F3F4F6", // #2
+  "#E5E7EB", // #3
+  "#D1D5DB", // #4
+  "#9CA3AF", // #5
+  "#6B7280", // #6
+  "#4B5563", // #7
+  "#374151", // #8
+  "#27272A", // #9
+  "#18181B"  // #10
 ]
 
-// Paleta degradê de 20 passos para o modal Top 20
-const TOP_20_COLORS = [
-  "#FADD00", "#F2D30A", "#EAC714", "#E1BB1E", "#D8AF28",
-  "#CFBB23", "#C4A72B", "#B99E30", "#AE9534", "#A59837",
-  "#998B39", "#8D7E3B", "#81713D", "#7A733D", "#6F673B",
-  "#645B38", "#5A5136", "#504D35", "#43402F", "#33322B"
+// Paleta degradê de 10 passos monocromática (Modo Claro: Preto -> Tons de Cinza)
+const TOP_10_COLORS_LIGHT = [
+  "#18181B", // #1 - Preto / Grafite escuro
+  "#27272A", // #2
+  "#374151", // #3
+  "#3F3F46", // #4
+  "#4B5563", // #5
+  "#52525B", // #6
+  "#6B7280", // #7
+  "#71717A", // #8
+  "#9CA3AF", // #9
+  "#D1D5DB"  // #10
 ]
+
+// Paleta degradê de 20 passos monocromática para o modal Top 20 (Modo Escuro)
+const TOP_20_COLORS_DARK = [
+  "#FFFFFF", "#F9FAFB", "#F3F4F6", "#E5E7EB", "#D1D5DB",
+  "#C4C4C8", "#9CA3AF", "#85858E", "#6B7280", "#5A5A64",
+  "#4B5563", "#3F3F46", "#374151", "#303036", "#27272A",
+  "#202024", "#1F2937", "#18181B", "#141416", "#0F0F11"
+]
+
+// Paleta degradê de 20 passos monocromática para o modal Top 20 (Modo Claro: Preto -> Tons de Cinza)
+const TOP_20_COLORS_LIGHT = [
+  "#0F0F11", "#141416", "#18181B", "#1F2937", "#202024",
+  "#27272A", "#303036", "#374151", "#3F3F46", "#4B5563",
+  "#52525B", "#5A5A64", "#6B7280", "#71717A", "#85858E",
+  "#9CA3AF", "#A1A1AA", "#C4C4C8", "#D1D5DB", "#E5E7EB"
+]
+
+function isColorLight(hex) {
+  const c = hex.replace("#", "")
+  const r = parseInt(c.substring(0, 2), 16)
+  const g = parseInt(c.substring(2, 4), 16)
+  const b = parseInt(c.substring(4, 6), 16)
+  return (0.299 * r + 0.587 * g + 0.114 * b) > 150
+}
 
 export default function TopClientsChart({ data = [] }) {
   const [isModalOpen, setIsModalOpen] = useState(false)
+  const { isDark } = useTheme()
 
   if (!data || data.length === 0) {
     return (
@@ -72,7 +104,7 @@ export default function TopClientsChart({ data = [] }) {
     return items.map((item, idx) => {
       const pct = Math.max(12, Math.min(80, Math.round((item.totalSpent / referenceMax) * 80)))
       const color = palette[idx % palette.length]
-      const isLightColor = idx < 3
+      const isLightColor = isColorLight(color)
       return {
         ...item,
         rank: idx + 1,
@@ -84,8 +116,11 @@ export default function TopClientsChart({ data = [] }) {
     })
   }
 
-  const processedTop10 = processItems(top10Data, maxVal, TOP_10_COLORS)
-  const processedTop20 = processItems(top20Data, maxVal20, TOP_20_COLORS)
+  const top10Palette = isDark ? TOP_10_COLORS_DARK : TOP_10_COLORS_LIGHT
+  const top20Palette = isDark ? TOP_20_COLORS_DARK : TOP_20_COLORS_LIGHT
+
+  const processedTop10 = processItems(top10Data, maxVal, top10Palette)
+  const processedTop20 = processItems(top20Data, maxVal20, top20Palette)
 
   // Ticks para o eixo X do Top 10
   const tickStep = maxVal / 4
@@ -182,7 +217,7 @@ export default function TopClientsChart({ data = [] }) {
       {/* MODAL EXPANDIDO COM OS TOP 20 CLIENTES */}
       {isModalOpen && typeof document !== "undefined" && createPortal(
         <div className="fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center z-[99999] p-3 sm:p-4 md:p-6 animate-fade-in overflow-y-auto">
-          <div className="bg-[#1c1c20] border border-gold-subtle/40 rounded-2xl md:rounded-3xl p-5 md:p-7 w-full max-w-5xl max-h-[92vh] overflow-y-auto shadow-2xl space-y-6 relative animate-scale-in my-auto">
+          <div className="bg-card border border-border rounded-2xl md:rounded-3xl p-5 md:p-7 w-full max-w-5xl max-h-[92vh] overflow-y-auto shadow-2xl space-y-6 relative animate-scale-in my-auto">
             
             {/* Cabeçalho do Modal */}
             <div className="flex items-center justify-between border-b border-border/40 pb-4">
@@ -195,7 +230,7 @@ export default function TopClientsChart({ data = [] }) {
                     Ranking dos Top 20 Clientes
                   </h3>
                   <p className="text-xs text-muted-foreground">
-                    Clientes que mais investiram em serviços e produtos na Barbearia Do Vale no período.
+                    Clientes com maior investimento em serviços e produtos no CLUB 01 Barber Studio.
                   </p>
                 </div>
               </div>

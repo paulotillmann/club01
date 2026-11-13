@@ -15,7 +15,7 @@ import {
   Receipt,
   RotateCw
 } from "lucide-react"
-import { API_URL } from "../context/AuthContext.jsx"
+import { customersApi } from "../lib/api.js"
 
 export default function CustomerHistoryModal({ customer, isOpen, onClose, token }) {
   const [loading, setLoading] = useState(true)
@@ -31,16 +31,7 @@ export default function CustomerHistoryModal({ customer, isOpen, onClose, token 
       setLoading(true)
       setError("")
       try {
-        const response = await fetch(`${API_URL}/api/customers/${customer.id}/history`, {
-          headers: {
-            Authorization: `Bearer ${token}`
-          }
-        })
-        if (!response.ok) {
-          const data = await response.json().catch(() => ({}))
-          throw new Error(data.error || "Não foi possível carregar o histórico do cliente.")
-        }
-        const data = await response.json()
+        const data = await customersApi.getHistory(customer.id)
         if (isMounted) {
           setHistoryData(data)
         }
@@ -168,7 +159,7 @@ export default function CustomerHistoryModal({ customer, isOpen, onClose, token 
       id: s.id,
       datetime: s.appointment_time || s.created_at,
       title: s.service_name || "Serviço Realizado",
-      subtitle: s.barber_name ? `Barbeiro: ${s.barber_name}` : "Barbearia Do Vale",
+      subtitle: s.barber_name ? `Barbeiro: ${s.barber_name}` : "CLUB 01 Barber Studio",
       price: s.service_price,
       status: s.status,
       cancellation_reason: s.cancellation_reason,
@@ -190,12 +181,12 @@ export default function CustomerHistoryModal({ customer, isOpen, onClose, token 
 
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-50 p-3 sm:p-4 md:p-6 animate-fade-in">
-      <div className="bg-[#18181b]/95 backdrop-blur-2xl w-full max-w-5xl border border-primary/30 rounded-2xl md:rounded-3xl shadow-2xl overflow-hidden flex flex-col h-[90vh] max-h-[860px] animate-scale-in">
+      <div className="bg-card w-full max-w-5xl border border-border rounded-2xl md:rounded-3xl shadow-2xl overflow-hidden flex flex-col h-[90vh] max-h-[860px] animate-scale-in">
         
         {/* CABEÇALHO DO MODAL (FIXO) */}
-        <div className="p-4 sm:p-5 border-b border-border/80 bg-gradient-to-r from-background/90 via-card/60 to-background/90 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shrink-0">
+        <div className="p-4 sm:p-5 border-b border-border bg-card flex flex-col sm:flex-row sm:items-center justify-between gap-4 shrink-0">
           <div className="flex items-center gap-3.5">
-            <div className="w-13 h-13 sm:w-14 sm:h-14 rounded-2xl overflow-hidden border-2 border-gold-subtle shadow-gold bg-background/80 flex items-center justify-center shrink-0">
+            <div className="w-13 h-13 sm:w-14 sm:h-14 rounded-2xl overflow-hidden border border-border shadow-sm bg-background flex items-center justify-center shrink-0">
               {customer.photo ? (
                 <img 
                   src={customer.photo} 
@@ -383,7 +374,7 @@ export default function CustomerHistoryModal({ customer, isOpen, onClose, token 
                 onClick={() => setActiveTab("all")}
                 className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
                   activeTab === "all"
-                    ? "bg-primary text-primary-foreground shadow-gold"
+                    ? "bg-primary text-primary-foreground shadow-sm"
                     : "bg-muted/50 hover:bg-muted text-muted-foreground hover:text-foreground"
                 }`}
               >
@@ -395,7 +386,7 @@ export default function CustomerHistoryModal({ customer, isOpen, onClose, token 
                 onClick={() => setActiveTab("services")}
                 className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
                   activeTab === "services"
-                    ? "bg-primary text-primary-foreground shadow-gold"
+                    ? "bg-primary text-primary-foreground shadow-sm"
                     : "bg-muted/50 hover:bg-muted text-muted-foreground hover:text-foreground"
                 }`}
               >
@@ -407,7 +398,7 @@ export default function CustomerHistoryModal({ customer, isOpen, onClose, token 
                 onClick={() => setActiveTab("products")}
                 className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
                   activeTab === "products"
-                    ? "bg-amber-500 text-black shadow-lg"
+                    ? "bg-primary text-primary-foreground shadow-sm"
                     : "bg-muted/50 hover:bg-muted text-muted-foreground hover:text-foreground"
                 }`}
               >

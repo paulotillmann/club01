@@ -1,13 +1,14 @@
 {
-  "name": "barbearia-backend",
+  "name": "club01-backend",
   "version": "1.0.0",
   "private": true,
   "main": "src/index.js",
   "scripts": {
-    "deploy": "wrangler deploy",
+    "deploy": "echo 'ERRO DE SEGURANCA: Deploy de Cloudflare Workers bloqueado para evitar publicacao no projeto Barbearia do Vale. O ambiente do CLUB 01 sera configurado na Fase 2.' && exit 1",
     "dev": "wrangler dev"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.118.0",
     "hono": "^4.4.12"
   },
   "devDependencies": {

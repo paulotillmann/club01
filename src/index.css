@@ -1,238 +1,330 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Rye&display=swap');
-
 @import "tailwindcss";
 
-@theme {
-  --font-display: 'Inter', sans-serif;
-  --font-sans: 'Inter', sans-serif;
-  
-  /* Paleta baseada na logo Do Vale - Premium */
-  --color-background: #050505; /* Preto absoluto */
-  --color-foreground: #fafafa; /* Branco quente */
-  
-  --color-card: #0f0f0f; /* Cinza absoluto */
-  --color-card-foreground: #fafafa;
-  
-  --color-popover: #0f0f0f;
-  --color-popover-foreground: #fafafa;
-  
-  --color-primary: #d4af37; /* Dourado clássico premium */
-  --color-primary-foreground: #050505;
-  
-  --color-secondary: #1a1a1a;
-  --color-secondary-foreground: #fafafa;
-  
+/* ==============================================================================
+   CLUB 01 BARBER STUDIO — DESIGN SYSTEM OFICIAL (FASE 4)
+   Monocromático, Minimalista, Premium, Acessível (WCAG 2.2 AA)
+   ============================================================================== */
+
+:root,
+html.dark,
+[data-theme="dark"] {
+  --color-background: #090909;
+  --color-secondary-bg: #141414;
+  --color-card: #1c1c1c;
+  --color-card-foreground: #ffffff;
+  --color-border: #343434;
+  --color-foreground: #ffffff;
+  --color-text-secondary: #d1d5db;
+  --color-text-muted: #a3a3a3;
+  --color-primary: #ffffff;
+  --color-primary-foreground: #000000;
   --color-muted: #141414;
-  --color-muted-foreground: #9ca3af;
+  --color-muted-foreground: #a3a3a3;
+  --color-accent: #262626;
+  --color-accent-foreground: #ffffff;
+  --color-input: #1c1c1c;
+  --color-ring: #ffffff;
   
-  --color-accent: #b8941f; /* Dourado escuro premium */
-  --color-accent-foreground: #fafafa;
-  
+  --color-success: #10b981;
+  --color-success-foreground: #000000;
   --color-destructive: #ef4444;
-  --color-destructive-foreground: #fafafa;
-  
-  --color-border: #262626; /* Borda sutil */
-  --color-input: #262626;
-  --color-ring: #d4af37;
-}
+  --color-destructive-foreground: #ffffff;
+  --color-warning: #f59e0b;
+  --color-warning-foreground: #000000;
 
-/* Custom Utilities - Premium */
-.font-rye {
-  font-family: "Rye", serif;
-  font-weight: 400;
-  font-style: normal;
-}
-
-.bg-gold-gradient {
-  background: linear-gradient(135deg, #f0d060 0%, #d4af37 40%, #b8941f 100%);
-}
-
-.gold-text {
-  background: linear-gradient(135deg, #ffe58c 0%, #d4af37 50%, #a68518 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-  color: #d4af37; /* Fallback */
-}
-
-.gold-text-solid {
-  color: #d4af37;
-  font-weight: 800;
-}
-
-.bg-hero-gradient {
-  background: radial-gradient(ellipse at center, #1f1914 0%, #0a0806 70%, #050302 100%);
-}
-
-.shadow-gold {
-  box-shadow: 
-    0 10px 40px -10px rgba(212, 175, 55, 0.4),
-    0 0 80px -20px rgba(212, 175, 55, 0.2);
-}
-
-.shadow-elevated {
-  box-shadow: 
-    0 20px 50px -15px rgba(0, 0, 0, 0.9),
-    0 0 30px -10px rgba(0, 0, 0, 0.5);
-}
-
-.shadow-gold-lg {
-  box-shadow: 
-    0 20px 60px -15px rgba(212, 175, 55, 0.5),
-    0 0 100px -30px rgba(212, 175, 55, 0.3);
-}
-
-.border-gold-subtle {
-  border-color: rgba(212, 175, 55, 0.15);
-}
-
-.border-gold {
-  border: 1px solid rgba(212, 175, 55, 0.3);
-}
-
-.glass-card {
-  background: rgba(15, 15, 15, 0.6);
-  backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.glow-gold {
-  box-shadow: 
-    0 0 40px -10px rgba(212, 175, 55, 0.6),
-    inset 0 0 20px -5px rgba(212, 175, 55, 0.1);
-}
-
-/* Scrollbar styling */
-::-webkit-scrollbar {
-  width: 8px;
-}
-::-webkit-scrollbar-track {
-  background: #090706;
-}
-::-webkit-scrollbar-thumb {
-  background: #271f1b;
-  border-radius: 4px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: #d4af37;
-}
-
-/* Custom styling for date, time, and datetime inputs - White calendar picker icon */
-input[type="date"],
-input[type="datetime-local"],
-input[type="month"],
-input[type="time"],
-input[type="week"] {
   color-scheme: dark;
 }
 
-input[type="date"]::-webkit-calendar-picker-indicator,
-input[type="datetime-local"]::-webkit-calendar-picker-indicator,
-input[type="month"]::-webkit-calendar-picker-indicator,
-input[type="time"]::-webkit-calendar-picker-indicator,
-input[type="week"]::-webkit-calendar-picker-indicator {
-  filter: brightness(0) invert(1);
+html.light,
+[data-theme="light"] {
+  --color-background: #ffffff;
+  --color-secondary-bg: #f5f5f5;
+  --color-card: #ffffff;
+  --color-card-foreground: #111111;
+  --color-border: #d4d4d4;
+  --color-foreground: #111111;
+  --color-text-secondary: #404040;
+  --color-text-muted: #525252;
+  --color-primary: #111111;
+  --color-primary-foreground: #ffffff;
+  --color-muted: #f5f5f5;
+  --color-muted-foreground: #525252;
+  --color-accent: #e5e5e5;
+  --color-accent-foreground: #111111;
+  --color-input: #ffffff;
+  --color-ring: #111111;
+
+  --color-success: #059669;
+  --color-success-foreground: #ffffff;
+  --color-destructive: #dc2626;
+  --color-destructive-foreground: #ffffff;
+  --color-warning: #d97706;
+  --color-warning-foreground: #ffffff;
+
+  color-scheme: light;
+}
+
+@theme {
+  --font-display: 'Bebas Neue', 'Impact', sans-serif;
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+
+  --color-background: var(--color-background);
+  --color-foreground: var(--color-foreground);
+  --color-card: var(--color-card);
+  --color-card-foreground: var(--color-card-foreground);
+  --color-border: var(--color-border);
+  --color-primary: var(--color-primary);
+  --color-primary-foreground: var(--color-primary-foreground);
+  --color-secondary: var(--color-secondary-bg);
+  --color-secondary-foreground: var(--color-foreground);
+  --color-muted: var(--color-muted);
+  --color-muted-foreground: var(--color-muted-foreground);
+  --color-accent: var(--color-accent);
+  --color-accent-foreground: var(--color-accent-foreground);
+  --color-input: var(--color-input);
+  --color-ring: var(--color-ring);
+  --color-destructive: var(--color-destructive);
+  --color-destructive-foreground: var(--color-destructive-foreground);
+  --color-success: var(--color-success);
+  --color-warning: var(--color-warning);
+}
+
+/* ==============================================================================
+   TIPOGRAFIA OFICIAL CLUB 01
+   ============================================================================== */
+.font-display {
+  font-family: 'Bebas Neue', 'Impact', sans-serif;
+  letter-spacing: 0.04em;
+}
+
+.font-sans {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+body {
+  font-family: 'Inter', sans-serif;
+  font-weight: 500;
+  background-color: var(--color-background);
+  color: var(--color-foreground);
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Títulos, Cabeçalhos e Destaques */
+h1, h2, h3, .heading-display {
+  font-family: 'Bebas Neue', 'Impact', sans-serif;
+  letter-spacing: 0.03em;
+}
+
+/* Textos e Labels */
+label, button, nav, .font-nav {
+  font-family: 'Inter', sans-serif;
+  font-weight: 600;
+}
+
+/* ==============================================================================
+   UTILITÁRIOS VISUAIS E COMPONENTES PREMIUM (MONOCROMÁTICOS)
+   ============================================================================== */
+.btn-primary {
+  background-color: var(--color-primary);
+  color: var(--color-primary-foreground);
+  font-family: 'Inter', sans-serif;
+  font-weight: 600;
+  border-radius: 0.75rem;
+  padding: 0.75rem 1.5rem;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
   cursor: pointer;
-  opacity: 0.9;
+  border: 1px solid transparent;
+}
+
+.btn-primary:hover {
+  opacity: 0.92;
+  transform: translateY(-1px);
+}
+
+.btn-primary:active {
+  transform: translateY(0);
+}
+
+.btn-secondary {
+  background-color: transparent;
+  color: var(--color-foreground);
+  font-family: 'Inter', sans-serif;
+  font-weight: 600;
+  border-radius: 0.75rem;
+  padding: 0.75rem 1.5rem;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border: 1px solid var(--color-border);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  cursor: pointer;
+}
+
+.btn-secondary:hover {
+  background-color: var(--color-accent);
+}
+
+/* Card e containers estruturais */
+.club-card {
+  background-color: var(--color-card);
+  color: var(--color-card-foreground);
+  border: 1px solid var(--color-border);
+  border-radius: 1rem;
+  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.15);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+html.dark .club-card {
+  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
+}
+
+/* Entradas de formulário (Inputs) - Acessibilidade Mobile: Mínimo 16px */
+input, select, textarea {
+  font-size: 16px !important;
+  font-weight: 500;
+}
+
+@layer components {
+  .club-input {
+    background-color: var(--color-input);
+    color: var(--color-foreground);
+    border: 1px solid var(--color-border);
+    border-radius: 0.75rem;
+    padding-top: 0.75rem;
+    padding-bottom: 0.75rem;
+    padding-left: 1rem;
+    padding-right: 1rem;
+    min-height: 44px;
+    width: 100%;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  }
+
+  .club-input:focus {
+    outline: none;
+    border-color: var(--color-ring);
+    box-shadow: 0 0 0 1px var(--color-ring);
+  }
+}
+
+/* Garante que nenhum ícone sobreponha o texto digitado em caixas de input do projeto */
+.club-input.pl-12, input.pl-12 {
+  padding-left: 3rem !important;
+}
+.club-input.pl-11, input.pl-11 {
+  padding-left: 2.75rem !important;
+}
+.club-input.pl-10, input.pl-10 {
+  padding-left: 2.5rem !important;
+}
+.club-input.pl-9, input.pl-9 {
+  padding-left: 2.25rem !important;
+}
+.club-input.pl-8, input.pl-8 {
+  padding-left: 2rem !important;
+}
+
+.club-input.pr-12, input.pr-12 {
+  padding-right: 3rem !important;
+}
+.club-input.pr-11, input.pr-11 {
+  padding-right: 2.75rem !important;
+}
+.club-input.pr-10, input.pr-10 {
+  padding-right: 2.5rem !important;
+}
+.club-input.pr-9, input.pr-9 {
+  padding-right: 2.25rem !important;
+}
+.club-input.pr-8, input.pr-8 {
+  padding-right: 2rem !important;
+}
+
+/* Scrollbar Minimalista */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--color-background);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-muted);
+}
+
+/* Ícone de data/hora no input */
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="time"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  opacity: 0.8;
   transition: opacity 0.2s ease;
 }
 
-input[type="date"]::-webkit-calendar-picker-indicator:hover,
-input[type="datetime-local"]::-webkit-calendar-picker-indicator:hover,
-input[type="month"]::-webkit-calendar-picker-indicator:hover,
-input[type="time"]::-webkit-calendar-picker-indicator:hover,
-input[type="week"]::-webkit-calendar-picker-indicator:hover {
-  opacity: 1;
+html.dark input[type="date"]::-webkit-calendar-picker-indicator,
+html.dark input[type="time"]::-webkit-calendar-picker-indicator {
+  filter: brightness(0) invert(1);
 }
 
-html {
-  scroll-behavior: smooth;
+html.light input[type="date"]::-webkit-calendar-picker-indicator,
+html.light input[type="time"]::-webkit-calendar-picker-indicator {
+  filter: brightness(0);
 }
 
-/* Remove all borders and backgrounds from logos */
-img[src*="logo"], img.logo {
-  border: none !important;
-  outline: none !important;
-  box-shadow: none !important;
-  background: transparent !important;
-  background-color: transparent !important;
-}
-
-img[src*="logo-nova"] {
-  border-radius: 0 !important;
-}
-
-/* Animations - Premium */
-@keyframes fade-in {
-  from { opacity: 0; transform: translateY(15px); }
+/* ==============================================================================
+   ANIMAÇÕES SUAVES E MICRO-INTERAÇÕES
+   ============================================================================== */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
-@keyframes slide-up {
-  from { opacity: 0; transform: translateY(40px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-@keyframes scale-in {
-  from { opacity: 0; transform: scale(0.95); }
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.97); }
   to { opacity: 1; transform: scale(1); }
 }
 
-@keyframes shimmer {
-  0% { background-position: -200% center; }
-  100% { background-position: 200% center; }
-}
-
 .animate-fade-in {
-  animation: fade-in 0.8s cubic-bezier(0.4, 0, 0.2, 1) forwards;
-}
-
-.animate-slide-up {
-  animation: slide-up 0.9s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  animation: fadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
 .animate-scale-in {
-  animation: scale-in 0.7s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  animation: scaleIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
-.animate-shimmer {
-  background: linear-gradient(90deg, 
-    rgba(255,255,255,0) 0%, 
-    rgba(255,255,255,0.03) 50%, 
-    rgba(255,255,255,0) 100%);
-  background-size: 200% 100%;
-  animation: shimmer 3s ease-in-out infinite;
+/* Preferência de Movimento Reduzido (Acessibilidade) */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
-/* Staggered animations */
-.animate-delay-100 { animation-delay: 0.1s; }
-.animate-delay-200 { animation-delay: 0.2s; }
-.animate-delay-300 { animation-delay: 0.3s; }
-.animate-delay-400 { animation-delay: 0.4s; }
-.animate-delay-500 { animation-delay: 0.5s; }
-
-/* Sidebar Collapsed Layout & Ultra-Smooth Transition System */
-.sidebar-smooth-transition,
-.sidebar-page-container,
-.sidebar-fixed-content {
-  transition: all 700ms cubic-bezier(0.16, 1, 0.3, 1) !important;
-  will-change: width, padding, left, margin;
+/* Layout Responsivo de Sidebar Desktop/Mobile */
+.sidebar-page-container {
+  transition: padding-left 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 @media (min-width: 1024px) {
   .sidebar-page-container {
-    padding-left: 274px !important;
-    padding-right: 40px !important;
+    padding-left: 310px !important;
   }
-
   body[data-sidebar-collapsed="true"] .sidebar-page-container {
-    padding-left: 152px !important;
-    padding-right: 40px !important;
-  }
-
-  body[data-sidebar-collapsed="true"] .sidebar-fixed-content {
-    left: 152px !important;
+    padding-left: 155px !important;
   }
 }
-

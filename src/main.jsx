@@ -3,6 +3,7 @@ import { BrowserRouter } from "react-router-dom"
 import "./index.css"
 import App from "./App.jsx"
 import { AuthProvider } from "./context/AuthContext.jsx"
+import { ThemeProvider } from "./context/ThemeContext.jsx"
 
 if (import.meta.env.DEV) {
   import("react-grab")
@@ -10,9 +11,10 @@ if (import.meta.env.DEV) {
 
 createRoot(document.getElementById("root")).render(
   <BrowserRouter>
-    <AuthProvider>
-      <App />
-    </AuthProvider>
+    <ThemeProvider>
+      <AuthProvider>
+        <App />
+      </AuthProvider>
+    </ThemeProvider>
   </BrowserRouter>,
 )
-

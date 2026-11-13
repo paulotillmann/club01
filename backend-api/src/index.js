@@ -15,8 +15,8 @@ app.use('*', cors({
 }));
 
 // --- Funções Auxiliares de Criptografia (Nativas do Web Crypto) ---
-const SALT = "barbearia-vale-salt-2026";
-const DEFAULT_JWT_SECRET = "barbearia-secret-key-2026";
+const SALT = "club01-barber-salt-2026";
+const DEFAULT_JWT_SECRET = "club01-secret-key-2026";
 
 async function hashPassword(password) {
   const encoder = new TextEncoder();
@@ -161,6 +161,15 @@ function getBrazilTimestampMs(appointmentTimeStr) {
 
 async function sendWhatsApp(env, phone, message) {
   if (!phone || !message) return false;
+
+  // ==============================================================================
+  // MODO DE SEGURANÇA E ISOLAMENTO (CLUB 01 BARBER STUDIO - FASE 1)
+  // ==============================================================================
+  // Envios reais para a instância "Barbearia do Vale" foram DESABILITADOS.
+  // Chamadas remotas à Edge Function foram BLOQUEADAS para proteger a produção.
+  // O modo de simulação local registra a mensagem no console e retorna sucesso (true)
+  // garantindo a integridade dos fluxos de agendamentos e registros de logs.
+  // ==============================================================================
   try {
     let cleanPhone = String(phone).replace(/\D/g, "");
     if (cleanPhone && cleanPhone.length >= 10 && cleanPhone.length <= 11 && !cleanPhone.startsWith("55")) {
@@ -168,29 +177,18 @@ async function sendWhatsApp(env, phone, message) {
     }
     const targetPhone = cleanPhone || phone;
 
-    const res = await fetch("https://abkyvggiydvigugltboe.supabase.co/functions/v1/send-whatsapp", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        phone: targetPhone,
-        message: message,
-        instance: "Barbearia do Vale"
-      })
-    });
-    const data = await res.json();
-    console.log("Resultado do envio de WhatsApp via Edge Function:", data);
-    return res.ok;
+    console.log(`[SIMULAÇÃO WHATSAPP - CLUB 01] Mensagem para ${targetPhone} simulada com sucesso (envio real desabilitado).`);
+    console.log(`--- Prévia da Mensagem ---\n${message}\n--------------------------`);
+    return true;
   } catch (e) {
-    console.error("Erro ao enviar WhatsApp via Edge Function:", e);
+    console.error("Erro na simulação do WhatsApp:", e);
     return false;
   }
 }
 
 // --- Endpoints da API ---
 
-app.get('/', (c) => c.text('API Barbearia do Vale - Ativa e rodando no Cloudflare Workers!'));
+app.get('/', (c) => c.text('API CLUB 01 Barber Studio - Ambiente Local Isolado'));
 
 // 1. Autenticação: Registro
 app.post('/api/auth/register', async (c) => {
@@ -1101,8 +1099,8 @@ app.post('/api/appointments', authMiddleware, async (c) => {
 
         // Enviar mensagem de WhatsApp de confirmação ao Cliente
         if (client && client.phone && servicesText) {
-          const barberDisplayName = barber && barber.name ? barber.name : 'Barbearia Do Vale';
-          const confirmationText = `🌟 *AGENDAMENTO CONFIRMADO!* 🌟\n\nOlá, *${client.name}*, seu horário na *Barbearia Do Vale* está reservado com sucesso! 🎉\n\n✂️ *Detalhes do seu atendimento:*\n━━━━━━━━━━━━━━━━━━\n💼 *Serviço(s):* ${servicesText}\n💈 *Profissional:* ${barberDisplayName}\n📅 *Data/Hora:* ${formattedDateTime}\n💵 *Valor:* R$ ${totalPrice.toFixed(2).replace('.', ',')}\n━━━━━━━━━━━━━━━━━━\n\n📍 *Endereço:*\nAv. Senador Melo Viana, 709 - Goiás, Araguari/MG\n\nNos vemos em breve para dar aquele trato no visual! 👊🔥\n\n━━━━━━━━━━━━━━━━━━\n📲 *Agende seu próximo horário online quando quiser:*\n👉 https://barbeariadovale.pages.dev\n_Rápido, prático e disponível 24h por dia!_ 💈✨`;
+          const barberDisplayName = barber && barber.name ? barber.name : 'CLUB 01 Barber Studio';
+          const confirmationText = `🌟 *AGENDAMENTO CONFIRMADO!* 🌟\n\nOlá, *${client.name}*, seu horário no *CLUB 01 Barber Studio* está reservado com sucesso! 🎉\n\n✂️ *Detalhes do seu atendimento:*\n━━━━━━━━━━━━━━━━━━\n💼 *Serviço(s):* ${servicesText}\n💈 *Profissional:* ${barberDisplayName}\n📅 *Data/Hora:* ${formattedDateTime}\n💵 *Valor:* R$ ${totalPrice.toFixed(2).replace('.', ',')}\n━━━━━━━━━━━━━━━━━━\n\nNos vemos em breve para dar aquele trato no visual! 👊🔥\n\n━━━━━━━━━━━━━━━━━━\n📲 *CLUB 01 Barber Studio*\n_Estilo, precisão e sofisticação._ 💈✨`;
           const sent = await sendWhatsApp(c.env, client.phone, confirmationText);
           await c.env.DB.prepare(
             "INSERT INTO whatsapp_logs (id, appointment_id, message_type, phone, status, sent_at) VALUES (?, ?, ?, ?, ?, datetime('now', 'localtime'))"
@@ -1289,8 +1287,8 @@ app.post('/api/appointments/quick', async (c) => {
 
         // Enviar mensagem de WhatsApp de confirmação ao Cliente
         if (phone && servicesText) {
-          const barberDisplayName = barber && barber.name ? barber.name : 'Barbearia Do Vale';
-          const confirmationText = `🌟 *AGENDAMENTO CONFIRMADO!* 🌟\n\nOlá, *${name}*, seu horário na *Barbearia Do Vale* está reservado com sucesso! 🎉\n\n✂️ *Detalhes do seu atendimento:*\n━━━━━━━━━━━━━━━━━━\n💼 *Serviço(s):* ${servicesText}\n💈 *Profissional:* ${barberDisplayName}\n📅 *Data/Hora:* ${formattedDateTime}\n💵 *Valor:* R$ ${totalPrice.toFixed(2).replace('.', ',')}\n━━━━━━━━━━━━━━━━━━\n\n📍 *Endereço:*\nAv. Senador Melo Viana, 709 - Goiás, Araguari/MG\n\n⚠️ _Se precisar reagendar ou cancelar, por favor avise com antecedência._\n\nNos vemos em breve para dar aquele tapa no visual! 👊🔥\n\n━━━━━━━━━━━━━━━━━━\n📲 *Agende seu próximo horário online quando quiser:*\n👉 https://barbeariadovale.pages.dev\n_Rápido, prático e disponível 24h por dia!_ 💈✨`;
+          const barberDisplayName = barber && barber.name ? barber.name : 'CLUB 01 Barber Studio';
+          const confirmationText = `🌟 *AGENDAMENTO CONFIRMADO!* 🌟\n\nOlá, *${name}*, seu horário no *CLUB 01 Barber Studio* está reservado com sucesso! 🎉\n\n✂️ *Detalhes do seu atendimento:*\n━━━━━━━━━━━━━━━━━━\n💼 *Serviço(s):* ${servicesText}\n💈 *Profissional:* ${barberDisplayName}\n📅 *Data/Hora:* ${formattedDateTime}\n💵 *Valor:* R$ ${totalPrice.toFixed(2).replace('.', ',')}\n━━━━━━━━━━━━━━━━━━\n\nNos vemos em breve para dar aquele trato no visual! 👊🔥\n\n━━━━━━━━━━━━━━━━━━\n📲 *CLUB 01 Barber Studio*\n_Estilo, precisão e sofisticação._ 💈✨`;
           const sent = await sendWhatsApp(c.env, phone, confirmationText);
           await c.env.DB.prepare(
             "INSERT INTO whatsapp_logs (id, appointment_id, message_type, phone, status, sent_at) VALUES (?, ?, ?, ?, ?, datetime('now', 'localtime'))"
@@ -1386,7 +1384,7 @@ app.put('/api/appointments/:id/cancel', authMiddleware, async (c) => {
 
     if (appointment.phone) {
       const formattedDateTime = formatDateTimeToBR(appointment.appointment_time);
-      const cancellationText = `🚨 *AGENDAMENTO CANCELADO* 🚨\n\nOlá, *${appointment.client_name}*.\nConfirmamos que o seu agendamento para o serviço *${appointment.service_name}* no dia *${formattedDateTime}* foi *CANCELADO* com sucesso.\n\nSentiremos sua falta! Mas quando estiver pronto para renovar o estilo, escolha o melhor momento para você: 💈✂️\n\n━━━━━━━━━━━━━━━━━━\n📲 *Agende um novo horário online a qualquer momento:*\n👉 https://barbeariadovale.pages.dev\n_Rápido, prático e disponível 24h por dia!_ 👊🔥`;
+      const cancellationText = `🚨 *AGENDAMENTO CANCELADO* 🚨\n\nOlá, *${appointment.client_name}*.\nConfirmamos que o seu agendamento para o serviço *${appointment.service_name}* no dia *${formattedDateTime}* foi *CANCELADO* com sucesso.\n\nSentiremos sua falta! Mas quando estiver pronto para renovar o estilo, estamos à sua disposição: 💈✂️\n\n━━━━━━━━━━━━━━━━━━\n📲 *CLUB 01 Barber Studio*\n_Estilo, precisão e sofisticação._ 👊🔥`;
       const sent = await sendWhatsApp(c.env, appointment.phone, cancellationText);
 
       await c.env.DB.prepare(
@@ -2958,9 +2956,9 @@ app.get('/api/settings', async (c) => {
     const { results } = await c.env.DB.prepare("SELECT key, value FROM settings").all();
     const defaultSettings = {
       min_lead_time_minutes: "30",
-      shop_name: "Barbearia Do Vale",
-      shop_address: "Av. Senador Melo Viana, 709 - Goiás, Araguari/MG",
-      shop_phone: "(34) 99868-4036",
+      shop_name: "CLUB 01 Barber Studio",
+      shop_address: "Ambiente Corporativo CLUB 01",
+      shop_phone: "(00) 00000-0000",
       shop_open_hours: "Seg - Sex: 09:00 - 20:00 | Sábado: 08:00 - 19:00",
       inactivity_minutes: "5"
     };
@@ -2975,9 +2973,9 @@ app.get('/api/settings', async (c) => {
   } catch (e) {
     return c.json({
       min_lead_time_minutes: "30",
-      shop_name: "Barbearia Do Vale",
-      shop_address: "Av. Senador Melo Viana, 709 - Goiás, Araguari/MG",
-      shop_phone: "(34) 99868-4036",
+      shop_name: "CLUB 01 Barber Studio",
+      shop_address: "Ambiente Corporativo CLUB 01",
+      shop_phone: "(00) 00000-0000",
       shop_open_hours: "Seg - Sex: 09:00 - 20:00 | Sábado: 08:00 - 19:00",
       inactivity_minutes: "5"
     });
@@ -3056,7 +3054,7 @@ export class AppointmentScheduler extends DurableObject {
                COALESCE(
                  (SELECT GROUP_CONCAT(s.name, ', ') FROM appointment_services aps JOIN services s ON aps.service_id = s.id WHERE aps.appointment_id = a.id),
                  s_single.name,
-                 'Atendimento Do Vale'
+                 'Atendimento CLUB 01'
                ) as service_name
         FROM appointments a
         LEFT JOIN customers cust ON a.client_id = cust.id
@@ -3067,7 +3065,7 @@ export class AppointmentScheduler extends DurableObject {
 
       if (appointment && appointment.status === 'confirmed' && appointment.client_phone) {
         const formattedDateTime = formatDateTimeToBR(appointment.appointment_time);
-        const reminderText = `⏰ *LEMBRETE DE AGENDAMENTO* ⏰\n\nOlá, *${appointment.client_name}*! Passando para te lembrar que seu horário na *Barbearia Do Vale* está chegando! 😎\n\n✂️ *Dados do atendimento:*\n━━━━━━━━━━━━━━━━━━\n💼 *Serviço(s):* ${appointment.service_name}\n📅 *Data/Hora:* ${formattedDateTime}\n━━━━━━━━━━━━━━━━━━\n\n📍 *Endereço:*\nAv. Senador Melo Viana, 709 - Goiás, Araguari/MG\n\nTe esperamos para dar aquele trato no visual! 👊💈\n\n━━━━━━━━━━━━━━━━━━\n📲 *Agende seus próximos horários no nosso portal:*\n👉 https://barbeariadovale.pages.dev\n_Estilo e conveniência 24h na palma da sua mão!_ ✨`;
+        const reminderText = `⏰ *LEMBRETE DE AGENDAMENTO* ⏰\n\nOlá, *${appointment.client_name}*! Passando para lembrar que seu horário no *CLUB 01 Barber Studio* está chegando! 😎\n\n✂️ *Dados do atendimento:*\n━━━━━━━━━━━━━━━━━━\n💼 *Serviço(s):* ${appointment.service_name}\n📅 *Data/Hora:* ${formattedDateTime}\n━━━━━━━━━━━━━━━━━━\n\nTe esperamos para cuidar do seu visual com excelência! 👊💈\n\n━━━━━━━━━━━━━━━━━━\n📲 *CLUB 01 Barber Studio*\n_Estilo, precisão e sofisticação._ ✨`;
         const sent = await sendWhatsApp(this.env, appointment.client_phone, reminderText);
 
         await this.env.DB.prepare(

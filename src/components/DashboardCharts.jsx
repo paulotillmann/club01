@@ -1,6 +1,7 @@
 import React, { useState } from "react"
 import { createPortal } from "react-dom"
 import { MoreVertical, Scissors, ShoppingBag, X, Maximize2 } from "lucide-react"
+import { useTheme } from "../context/ThemeContext.jsx"
 import {
   ResponsiveContainer,
   AreaChart,
@@ -35,7 +36,7 @@ const FinancialTooltip = ({ active, payload, label }) => {
     const total = dayData?.total || 0
 
     return (
-      <div className="bg-[#18181b]/95 backdrop-blur-md border border-border/80 rounded-xl p-3.5 shadow-2xl text-xs space-y-2.5 min-w-[240px] z-50">
+      <div className="bg-card/95 backdrop-blur-md border border-border/80 rounded-xl p-3.5 shadow-2xl text-xs space-y-2.5 min-w-[240px] z-50">
         <div className="flex items-center justify-between border-b border-border/40 pb-2">
           <span className="font-bold text-foreground font-mono text-sm">{label}</span>
           <span className="font-extrabold text-primary font-mono text-sm">{formatCurrency(total)}</span>
@@ -103,10 +104,10 @@ const BarberTooltip = ({ active, payload, label }) => {
           <div className="space-y-0.5">
             <div className="flex items-center justify-between text-muted-foreground text-[11px]">
               <span className="flex items-center gap-1.5 font-medium text-foreground">
-                <span className="w-2 h-2 rounded-full bg-[#FADD00] shrink-0"></span>
+                <span className="w-2 h-2 rounded-full bg-white shrink-0"></span>
                 Serviços ({data.serviceCommissionPct || 0}% comissão):
               </span>
-              <span className="font-bold text-[#FADD00] font-mono">
+              <span className="font-bold text-white font-mono">
                 {formatCurrency(data.atendimentoValor || 0)}
               </span>
             </div>
@@ -119,10 +120,10 @@ const BarberTooltip = ({ active, payload, label }) => {
           <div className="space-y-0.5">
             <div className="flex items-center justify-between text-muted-foreground text-[11px]">
               <span className="flex items-center gap-1.5 font-medium text-foreground">
-                <span className="w-2 h-2 rounded-full bg-[#FFFFFF] shrink-0"></span>
+                <span className="w-2 h-2 rounded-full bg-[#9CA3AF] shrink-0"></span>
                 Produtos ({data.productCommissionPct || 0}% comissão):
               </span>
-              <span className="font-bold text-white font-mono">
+              <span className="font-bold text-[#9CA3AF] font-mono">
                 {formatCurrency(data.produtosValor || 0)}
               </span>
             </div>
@@ -166,6 +167,8 @@ const PieTooltip = ({ active, payload }) => {
 }
 
 export function FinancialTrendChart({ data = [], viewMode = "simplificado" }) {
+  const { isDark } = useTheme()
+
   if (!data || data.length === 0) {
     return (
       <div className="h-80 flex items-center justify-center text-xs text-muted-foreground border border-dashed border-border/60 rounded-2xl bg-muted/10">
@@ -179,14 +182,19 @@ export function FinancialTrendChart({ data = [], viewMode = "simplificado" }) {
     (k) => k !== "date" && k !== "total" && k !== "details"
   )
 
-  const BARBER_PALETTE = ["#FADD00", "#A59837", "#504D35", "#CFBB23", "#7A733D", "#33322B"]
+  const BARBER_PALETTE = isDark
+    ? ["#FFFFFF", "#D1D5DB", "#9CA3AF", "#6B7280", "#4B5563", "#374151"]
+    : ["#18181B", "#3F3F46", "#52525B", "#71717A", "#A1A1AA", "#D4D4D8"]
+  const primaryBarColor = isDark ? "#FFFFFF" : "#18181B"
+  const labelTextColor = isDark ? "#FFFFFF" : "#18181B"
+  const gridStrokeColor = isDark ? "#27272a" : "#e4e4e7"
   const isSimplificado = viewMode === "simplificado"
 
   return (
     <div className="h-80 w-full">
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={data} barGap="-100%" margin={{ top: 35, right: 10, left: -15, bottom: 0 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#27272a" vertical={false} />
+          <CartesianGrid strokeDasharray="3 3" stroke={gridStrokeColor} vertical={false} />
           <XAxis dataKey="date" stroke="#71717a" fontSize={11} tickLine={false} axisLine={false} />
           <YAxis stroke="#71717a" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(val) => `R$${val}`} />
           <Tooltip content={<FinancialTooltip />} />
@@ -203,7 +211,7 @@ export function FinancialTrendChart({ data = [], viewMode = "simplificado" }) {
           )}
 
           {isSimplificado ? (
-            <Bar dataKey="total" name="Faturamento do Dia" fill="#FADD00" radius={[8, 8, 0, 0]}>
+            <Bar dataKey="total" name="Faturamento do Dia" fill={primaryBarColor} radius={[8, 8, 0, 0]}>
               <LabelList
                 dataKey="total"
                 position="top"
@@ -212,7 +220,7 @@ export function FinancialTrendChart({ data = [], viewMode = "simplificado" }) {
                     ? `R$ ${Number(val).toLocaleString("pt-BR", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
                     : ""
                 }
-                style={{ fill: "#ffffff", fontSize: "18pt", fontWeight: "900", fontFamily: "monospace" }}
+                style={{ fill: labelTextColor, fontSize: "18pt", fontWeight: "900", fontFamily: "monospace" }}
               />
             </Bar>
           ) : (
@@ -237,7 +245,7 @@ export function FinancialTrendChart({ data = [], viewMode = "simplificado" }) {
                       ? `R$ ${Number(val).toLocaleString("pt-BR", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
                       : ""
                   }
-                  style={{ fill: "#ffffff", fontSize: "18pt", fontWeight: "900", fontFamily: "monospace" }}
+                  style={{ fill: labelTextColor, fontSize: "18pt", fontWeight: "900", fontFamily: "monospace" }}
                 />
               </Bar>
             </>
@@ -253,7 +261,7 @@ const DailyTicketTooltip = ({ active, payload, label }) => {
   if (active && payload && payload.length) {
     const dayData = payload[0]?.payload || {}
     return (
-      <div className="bg-[#18181b]/95 backdrop-blur-md border border-border/80 rounded-xl p-3.5 shadow-2xl text-xs space-y-2.5 min-w-[240px] z-50">
+      <div className="bg-card/95 backdrop-blur-md border border-border/80 rounded-xl p-3.5 shadow-2xl text-xs space-y-2.5 min-w-[240px] z-50">
         <div className="flex items-center justify-between border-b border-border/40 pb-2">
           <span className="font-bold text-foreground font-mono text-sm">{label}</span>
           <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Ticket Médio</span>
@@ -317,32 +325,32 @@ export function DailyTicketTrendChart({ data = [] }) {
             type="monotone"
             dataKey="ticketServicos"
             name="Ticket Serviços"
-            stroke="#FADD00"
+            stroke="#FFFFFF"
             strokeWidth={3}
-            dot={{ r: 4, fill: "#FADD00", stroke: "#18181b", strokeWidth: 2 }}
+            dot={{ r: 4, fill: "#FFFFFF", stroke: "#18181b", strokeWidth: 2 }}
             activeDot={{ r: 6, stroke: "#ffffff", strokeWidth: 2 }}
           >
             <LabelList
               dataKey="ticketServicos"
               position="top"
               formatter={(val) => Number(val) > 0 ? `R$${Math.round(val)}` : ""}
-              style={{ fill: "#FADD00", fontSize: "9pt", fontWeight: "800", fontFamily: "monospace" }}
+              style={{ fill: "#FFFFFF", fontSize: "9pt", fontWeight: "800", fontFamily: "monospace" }}
             />
           </Line>
           <Line
             type="monotone"
             dataKey="ticketProdutos"
             name="Ticket Produtos"
-            stroke="#ffffff"
+            stroke="#9CA3AF"
             strokeWidth={3}
-            dot={{ r: 4, fill: "#ffffff", stroke: "#18181b", strokeWidth: 2 }}
-            activeDot={{ r: 6, stroke: "#FADD00", strokeWidth: 2 }}
+            dot={{ r: 4, fill: "#9CA3AF", stroke: "#18181b", strokeWidth: 2 }}
+            activeDot={{ r: 6, stroke: "#FFFFFF", strokeWidth: 2 }}
           >
             <LabelList
               dataKey="ticketProdutos"
               position="top"
               formatter={(val) => Number(val) > 0 ? `R$${Math.round(val)}` : ""}
-              style={{ fill: "#ffffff", fontSize: "9pt", fontWeight: "800", fontFamily: "monospace" }}
+              style={{ fill: "#9CA3AF", fontSize: "9pt", fontWeight: "800", fontFamily: "monospace" }}
             />
           </Line>
         </LineChart>
@@ -352,6 +360,8 @@ export function DailyTicketTrendChart({ data = [] }) {
 }
 
 export function BarberPerformanceChart({ data = [] }) {
+  const { isDark } = useTheme()
+
   if (!data || data.length === 0) {
     return (
       <div className="h-80 flex items-center justify-center text-xs text-muted-foreground border border-dashed border-border/60 rounded-2xl bg-muted/10">
@@ -359,6 +369,12 @@ export function BarberPerformanceChart({ data = [] }) {
       </div>
     )
   }
+
+  const servicesColor = isDark ? "#FFFFFF" : "#18181B"
+  const productsColor = isDark ? "#9CA3AF" : "#52525B"
+  const commissionColor = isDark ? "#52525B" : "#A1A1AA"
+  const commissionLabelColor = isDark ? "#A1A1AA" : "#52525B"
+  const gridStrokeColor = isDark ? "#27272a" : "#e4e4e7"
 
   return (
     <div className="h-80 w-full">
@@ -369,7 +385,7 @@ export function BarberPerformanceChart({ data = [] }) {
           barGap={3}
           barCategoryGap="20%"
         >
-          <CartesianGrid strokeDasharray="3 3" stroke="#27272a" vertical={false} />
+          <CartesianGrid strokeDasharray="3 3" stroke={gridStrokeColor} vertical={false} />
           <XAxis dataKey="name" stroke="#71717a" fontSize="10pt" tickLine={false} axisLine={false} />
           <YAxis stroke="#71717a" fontSize="10pt" tickLine={false} axisLine={false} tickFormatter={(val) => `R$${val}`} />
           <Tooltip content={<BarberTooltip />} />
@@ -385,7 +401,7 @@ export function BarberPerformanceChart({ data = [] }) {
           <Bar
             dataKey="atendimentoValor"
             name="Total em Serviços"
-            fill="#FADD00"
+            fill={servicesColor}
             radius={[6, 6, 0, 0]}
             minPointSize={2}
           >
@@ -397,13 +413,13 @@ export function BarberPerformanceChart({ data = [] }) {
                   ? `R$${Number(val).toLocaleString("pt-BR", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
                   : ""
               }
-              style={{ fill: "#FADD00", fontSize: "9pt", fontWeight: "800", fontFamily: "monospace" }}
+              style={{ fill: servicesColor, fontSize: "9pt", fontWeight: "800", fontFamily: "monospace" }}
             />
           </Bar>
           <Bar
             dataKey="produtosValor"
             name="Total em Produtos"
-            fill="#FFFFFF"
+            fill={productsColor}
             radius={[6, 6, 0, 0]}
             minPointSize={2}
           >
@@ -415,13 +431,13 @@ export function BarberPerformanceChart({ data = [] }) {
                   ? `R$${Number(val).toLocaleString("pt-BR", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
                   : ""
               }
-              style={{ fill: "#FFFFFF", fontSize: "9pt", fontWeight: "800", fontFamily: "monospace" }}
+              style={{ fill: productsColor, fontSize: "9pt", fontWeight: "800", fontFamily: "monospace" }}
             />
           </Bar>
           <Bar
             dataKey="comissaoTotal"
             name="Comissão do Barbeiro"
-            fill="#22C55E"
+            fill={commissionColor}
             radius={[6, 6, 0, 0]}
             minPointSize={2}
           >
@@ -433,7 +449,7 @@ export function BarberPerformanceChart({ data = [] }) {
                   ? `R$${Number(val).toLocaleString("pt-BR", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
                   : ""
               }
-              style={{ fill: "#4ADE80", fontSize: "9pt", fontWeight: "800", fontFamily: "monospace" }}
+              style={{ fill: commissionLabelColor, fontSize: "9pt", fontWeight: "800", fontFamily: "monospace" }}
             />
           </Bar>
         </BarChart>
@@ -457,7 +473,7 @@ export function ServicesDistributionChart({ data = [] }) {
     )
   }
 
-  const DEFAULT_COLORS = ["#FADD00", "#CFBB23", "#A59837", "#7A733D", "#504D35", "#33322B"]
+  const DEFAULT_COLORS = ["#FFFFFF", "#E5E7EB", "#D1D5DB", "#9CA3AF", "#6B7280", "#4B5563"]
 
   // Ordenar serviços pelo valor decrescente e limitar aos 6 principais
   const sortedData = [...data].sort((a, b) => b.value - a.value).slice(0, 6)
@@ -466,7 +482,7 @@ export function ServicesDistributionChart({ data = [] }) {
   const processedData = sortedData.map((item, idx) => {
     const pct = Math.max(12, Math.round((item.value / maxVal) * 82))
     const color = item.color || DEFAULT_COLORS[idx % DEFAULT_COLORS.length]
-    const isLightColor = ["#FADD00", "#CFBB23", "#A59837"].includes(color)
+    const isLightColor = ["#FFFFFF", "#E5E7EB", "#D1D5DB"].includes(color)
     return {
       ...item,
       rank: idx + 1,
@@ -589,7 +605,7 @@ export function StatusDistributionChart({ data = [] }) {
     )
   }
 
-  const DEFAULT_STATUS_COLORS = ["#FADD00", "#504D35", "#A59837", "#CFBB23", "#7A733D", "#33322B"]
+  const DEFAULT_STATUS_COLORS = ["#FFFFFF", "#D1D5DB", "#9CA3AF", "#6B7280", "#4B5563", "#374151"]
 
   return (
     <div className="h-72 w-full flex flex-col items-center justify-between gap-2">
@@ -632,6 +648,7 @@ export function StatusDistributionChart({ data = [] }) {
 
 export function ProductsDistributionChart({ data = [] }) {
   const [isModalOpen, setIsModalOpen] = useState(false)
+  const { isDark } = useTheme()
 
   if (!data || data.length === 0) {
     return (
@@ -647,7 +664,9 @@ export function ProductsDistributionChart({ data = [] }) {
     )
   }
 
-  const DEFAULT_COLORS = ["#FADD00", "#CFBB23", "#A59837", "#7A733D", "#504D35", "#33322B", "#8C8638", "#B5A730"]
+  const DEFAULT_COLORS = isDark
+    ? ["#FFFFFF", "#E5E7EB", "#D1D5DB", "#9CA3AF", "#6B7280", "#4B5563", "#374151", "#27272A"]
+    : ["#18181B", "#27272A", "#374151", "#4B5563", "#52525B", "#6B7280", "#9CA3AF", "#D1D5DB"]
 
   // Ordenar produtos pela quantidade sold decrescente
   const sortedData = [...data].sort((a, b) => b.value - a.value)
@@ -659,8 +678,8 @@ export function ProductsDistributionChart({ data = [] }) {
   const processItems = (items) => {
     return items.map((item, idx) => {
       const pct = Math.max(12, Math.round((item.value / maxVal) * 82))
-      const color = item.color || DEFAULT_COLORS[idx % DEFAULT_COLORS.length]
-      const isLightColor = ["#FADD00", "#CFBB23", "#A59837"].includes(color)
+      const color = DEFAULT_COLORS[idx % DEFAULT_COLORS.length]
+      const isLightColor = ["#FFFFFF", "#E5E7EB", "#D1D5DB", "#9CA3AF"].includes(color)
       return {
         ...item,
         rank: idx + 1,
@@ -783,7 +802,7 @@ export function ProductsDistributionChart({ data = [] }) {
       {/* MODAL COMPLETO DE PRODUTOS VENDIDOS (RENDERIZADO VIA PORTAL NO DOCUMENT.BODY) */}
       {isModalOpen && typeof document !== "undefined" && createPortal(
         <div className="fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center z-[99999] p-4 md:p-6 animate-fade-in overflow-y-auto">
-          <div className="bg-[#1c1c20] border border-gold-subtle/40 rounded-2xl p-6 md:p-8 w-full max-w-4xl max-h-[90vh] overflow-y-auto shadow-2xl space-y-6 relative animate-scale-in my-auto">
+          <div className="bg-card border border-border rounded-2xl p-6 md:p-8 w-full max-w-4xl max-h-[90vh] overflow-y-auto shadow-2xl space-y-6 relative animate-scale-in my-auto">
             {/* Cabeçalho do Modal */}
             <div className="flex items-center justify-between border-b border-border/40 pb-4">
               <div className="flex items-center gap-3">
@@ -891,7 +910,7 @@ const ServicesVsProductsTooltip = ({ active, payload }) => {
     if (!data.name || data.name === "Sem vendas") return null
 
     return (
-      <div className="bg-[#18181b]/95 backdrop-blur-md border border-border/80 rounded-xl p-3 shadow-xl text-xs space-y-1 z-50">
+      <div className="bg-card/95 backdrop-blur-md border border-border/80 rounded-xl p-3 shadow-xl text-xs space-y-1 z-50">
         <p className="font-bold text-foreground flex items-center gap-1.5">
           <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: data.color }} />
           {data.name}
@@ -919,12 +938,17 @@ export function ServicesVsProductsChart({
   servicesCount = 0,
   productsCount = 0
 }) {
+  const { isDark } = useTheme()
   const sTotal = Number(servicesTotal) || 0
   const pTotal = Number(productsTotal) || 0
   const totalValue = sTotal + pTotal
 
   const pctServicos = totalValue > 0 ? ((sTotal / totalValue) * 100).toFixed(1) : "0.0"
   const pctProdutos = totalValue > 0 ? ((pTotal / totalValue) * 100).toFixed(1) : "0.0"
+
+  const servicesColor = isDark ? "#FFFFFF" : "#18181B"
+  const productsColor = isDark ? "#71717A" : "#9CA3AF"
+  const emptyColor = isDark ? "#3f3f46" : "#e4e4e7"
 
   const itemsList = [
     {
@@ -933,7 +957,7 @@ export function ServicesVsProductsChart({
       rawValue: sTotal,
       count: servicesCount,
       pct: pctServicos,
-      color: "#FADD00"
+      color: servicesColor
     },
     {
       name: "Produtos",
@@ -941,13 +965,13 @@ export function ServicesVsProductsChart({
       rawValue: pTotal,
       count: productsCount,
       pct: pctProdutos,
-      color: "#504D35"
+      color: productsColor
     }
   ]
 
 
   const chartSlices = totalValue === 0
-    ? [{ name: "Sem vendas", value: 1, color: "#3f3f46" }]
+    ? [{ name: "Sem vendas", value: 1, color: emptyColor }]
     : itemsList.filter((it) => it.rawValue > 0)
 
   return (
@@ -976,7 +1000,7 @@ export function ServicesVsProductsChart({
 
         {/* Texto do Centro do Donut */}
         <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none text-center px-2">
-          <span className="text-lg md:text-xl font-black font-mono text-white tracking-tight leading-tight drop-shadow-sm">
+          <span className="text-lg md:text-xl font-black font-mono text-foreground tracking-tight leading-tight drop-shadow-sm">
             {formatCurrency(totalValue)}
           </span>
           <span className="text-[10px] md:text-[11px] text-muted-foreground uppercase font-bold tracking-wider mt-0.5">

@@ -1,4 +1,4 @@
-# Projeto: barbearia-cloned (React + Vite + Tailwind + Router)
+# Projeto: CLUB 01 Barber Studio (React + Vite + Tailwind + Router)
 
 Regras para trabalhar neste projeto. SIGA À RISCA.
 

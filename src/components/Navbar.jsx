@@ -1,7 +1,8 @@
 import React, { useState } from "react"
 import { Link, useNavigate, useLocation } from "react-router-dom"
-import { Menu, X, LogIn, UserPlus, LayoutDashboard, LogOut } from "lucide-react"
+import { Menu, X, LayoutDashboard, LogOut, Calendar } from "lucide-react"
 import Logo from "./Logo.jsx"
+import ThemeToggle from "./ThemeToggle.jsx"
 import { useAuth } from "../context/AuthContext.jsx"
 
 export default function Navbar() {
@@ -30,132 +31,179 @@ export default function Navbar() {
     }
   }
 
-  if (user && user.role !== 'client') return null
+  // Se o usuário está logado e é admin/secretário/barber na área restrita, a Sidebar cuida da navegação
+  if (user && user.role !== "client") return null
 
   return (
-    <header className="fixed top-0 left-0 right-0 z-50 bg-background/70 backdrop-blur-xl border-b border-gold-subtle transition-all duration-500">
-      <div className="container mx-auto px-4">
-        <div className="flex items-center justify-between h-20 md:h-24">
-          {/* Logo - Premium */}
-          {!user && (
-            <Link to="/" onClick={handleLogoClick} className="flex items-center gap-4 group">
-              <img src="/assets/logo-nova-sem-borda.png" alt="Barbearia Do Vale" className="h-[72px] w-auto object-contain border-none transition-transform duration-500 group-hover:scale-105" style={{border: 'none'}} />
-            </Link>
-          )}
+    <header className="fixed top-0 left-0 right-0 z-50 bg-background/90 backdrop-blur-md border-b border-border transition-colors duration-200">
+      <div className="container mx-auto px-4 max-w-7xl">
+        <div className="flex items-center justify-between h-20">
+          {/* Logo Oficial CLUB 01 */}
+          <Link
+            to="/"
+            onClick={handleLogoClick}
+            className="flex items-center gap-3 transition-opacity duration-200 hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-lg p-1"
+          >
+            <Logo className="h-11 w-auto" showText={true} />
+          </Link>
 
-          {/* Desktop Navigation - Premium */}
-          <nav className="hidden md:flex items-center gap-10">
+          {/* Desktop Navigation */}
+          <nav className="hidden md:flex items-center gap-8">
             <button
+              type="button"
               onClick={() => handleNavClick("#services")}
-              className="text-muted-foreground hover:text-primary text-sm font-medium transition-all duration-300 cursor-pointer tracking-wide relative after:content-[''] after:absolute after:-bottom-1 after:left-0 after:w-0 after:h-[2px] after:bg-primary after:transition-all duration-300 hover:after:w-full"
+              className="text-muted-foreground hover:text-foreground text-sm font-semibold transition-colors duration-200 cursor-pointer tracking-wide py-2"
             >
               Serviços
             </button>
 
             <button
+              type="button"
               onClick={() => handleNavClick("#team")}
-              className="text-muted-foreground hover:text-primary text-sm font-medium transition-all duration-300 cursor-pointer tracking-wide relative after:content-[''] after:absolute after:-bottom-1 after:left-0 after:w-0 after:h-[2px] after:bg-primary after:transition-all duration-300 hover:after:w-full"
+              className="text-muted-foreground hover:text-foreground text-sm font-semibold transition-colors duration-200 cursor-pointer tracking-wide py-2"
             >
               Equipe
             </button>
 
+            <button
+              type="button"
+              onClick={() => handleNavClick("#about")}
+              className="text-muted-foreground hover:text-foreground text-sm font-semibold transition-colors duration-200 cursor-pointer tracking-wide py-2"
+            >
+              Sobre
+            </button>
+
             <Link
               to="/agendar"
-              className="text-primary hover:text-primary-foreground bg-primary/10 hover:bg-primary px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-300 cursor-pointer tracking-wide shadow-gold/20 shadow-sm border border-primary/20"
+              className="btn-primary text-sm px-5 py-2.5 shadow-sm inline-flex items-center gap-2"
             >
-              Agendar
+              <Calendar size={16} /> Agendar
             </Link>
           </nav>
 
-          {/* Desktop Action Buttons - Premium */}
-          <div className="hidden md:flex items-center gap-5">
+          {/* Desktop Actions & Theme Toggle */}
+          <div className="hidden md:flex items-center gap-3">
+            <ThemeToggle />
+
             {user ? (
-              <>
-                <button 
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
                   onClick={() => navigate("/dashboard")}
-                  className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl text-sm font-medium transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 text-foreground hover:bg-muted/80 hover:text-foreground h-12 px-5 py-3 border border-gold-subtle cursor-pointer"
+                  className="btn-secondary text-sm px-4 py-2.5 inline-flex items-center gap-2"
                 >
                   <LayoutDashboard size={16} /> Painel
                 </button>
-                <button 
-                  onClick={() => { logout(); navigate("/"); }}
-                  className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl text-sm transition-all duration-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 bg-gold-gradient text-primary-foreground font-semibold shadow-gold hover:shadow-gold-lg hover:-translate-y-0.5 active:translate-y-0 h-12 px-7 py-3 cursor-pointer"
+                <button
+                  type="button"
+                  onClick={() => {
+                    logout()
+                    navigate("/")
+                  }}
+                  className="btn-secondary text-sm px-4 py-2.5 inline-flex items-center gap-2 text-destructive hover:bg-destructive/10"
                 >
                   <LogOut size={16} /> Sair
                 </button>
-              </>
+              </div>
             ) : (
-              <>
-                <button 
-                  onClick={() => navigate("/login")}
-                  className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl text-sm transition-all duration-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 bg-gold-gradient text-primary-foreground font-semibold shadow-gold hover:shadow-gold-lg hover:-translate-y-0.5 active:translate-y-0 h-12 px-7 py-3 cursor-pointer"
-                >
-                  Entrar
-                </button>
-              </>
+              <button
+                type="button"
+                onClick={() => navigate("/login")}
+                className="btn-secondary text-sm px-5 py-2.5 font-semibold"
+              >
+                Entrar
+              </button>
             )}
           </div>
 
-          {/* Mobile Menu Button - Premium */}
-          <button
-            onClick={() => setIsOpen(!isOpen)}
-            className="md:hidden p-3 text-foreground hover:text-primary transition-all duration-300 cursor-pointer rounded-xl hover:bg-muted/50"
-            aria-label="Toggle Menu"
-          >
-            {isOpen ? <X size={24} /> : <Menu size={24} />}
-          </button>
+          {/* Mobile Right Controls */}
+          <div className="flex items-center gap-2 md:hidden">
+            <ThemeToggle compact={true} />
+
+            <button
+              type="button"
+              onClick={() => setIsOpen(!isOpen)}
+              className="min-w-[44px] min-h-[44px] inline-flex items-center justify-center text-foreground hover:bg-secondary transition-colors duration-200 cursor-pointer rounded-xl border border-border"
+              aria-label={isOpen ? "Fechar Menu" : "Abrir Menu"}
+              aria-expanded={isOpen}
+            >
+              {isOpen ? <X size={22} /> : <Menu size={22} />}
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* Mobile Navigation Dropdown - Premium */}
+      {/* Mobile Navigation Dropdown */}
       {isOpen && (
-        <div className="md:hidden absolute top-20 left-0 right-0 bg-background/95 border-b border-gold-subtle backdrop-blur-xl animate-fade-in py-8 px-6 flex flex-col gap-6 shadow-2xl">
+        <div className="md:hidden border-b border-border bg-background/98 backdrop-blur-xl animate-fade-in py-6 px-6 flex flex-col gap-4 shadow-xl">
           <button
+            type="button"
             onClick={() => handleNavClick("#services")}
-            className="text-left text-muted-foreground hover:text-primary text-base font-medium py-3 border-b border-gold-subtle transition-colors tracking-wide"
+            className="text-left text-foreground hover:text-foreground/80 text-base font-semibold py-3 border-b border-border/50 transition-colors"
           >
             Serviços
           </button>
 
           <button
+            type="button"
             onClick={() => handleNavClick("#team")}
-            className="text-left text-muted-foreground hover:text-primary text-base font-medium py-3 border-b border-gold-subtle transition-colors tracking-wide"
+            className="text-left text-foreground hover:text-foreground/80 text-base font-semibold py-3 border-b border-border/50 transition-colors"
           >
             Equipe
           </button>
 
           <button
-            onClick={() => { setIsOpen(false); navigate("/agendar"); }}
-            className="text-left text-primary hover:text-primary-foreground font-semibold py-3 border-b border-gold-subtle transition-colors tracking-wide"
+            type="button"
+            onClick={() => handleNavClick("#about")}
+            className="text-left text-foreground hover:text-foreground/80 text-base font-semibold py-3 border-b border-border/50 transition-colors"
           >
-            Agendar Horário
+            Sobre o Studio
           </button>
 
-          <div className="flex flex-col gap-4 pt-4">
+          <Link
+            to="/agendar"
+            onClick={() => setIsOpen(false)}
+            className="btn-primary text-base py-3 justify-center w-full"
+          >
+            <Calendar size={18} /> Agendar Horário Online
+          </Link>
+
+          <div className="flex flex-col gap-3 pt-2">
             {user ? (
               <>
-                <button 
-                  onClick={() => { setIsOpen(false); navigate("/dashboard"); }}
-                  className="w-full inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl text-sm font-medium transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 text-foreground hover:bg-muted/80 hover:text-foreground h-12 px-7 py-3 border border-gold-subtle cursor-pointer"
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsOpen(false)
+                    navigate("/dashboard")
+                  }}
+                  className="btn-secondary text-base py-3 justify-center w-full"
                 >
-                  <LayoutDashboard size={16} /> Painel
+                  <LayoutDashboard size={18} /> Acessar Painel
                 </button>
-                <button 
-                  onClick={() => { setIsOpen(false); logout(); navigate("/"); }}
-                  className="w-full inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl text-sm transition-all duration-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 bg-gold-gradient text-primary-foreground font-semibold shadow-gold hover:shadow-gold-lg active:translate-y-0 h-12 px-7 py-3 cursor-pointer"
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsOpen(false)
+                    logout()
+                    navigate("/")
+                  }}
+                  className="btn-secondary text-base py-3 justify-center w-full text-destructive border-destructive/40"
                 >
-                  <LogOut size={16} /> Sair
+                  <LogOut size={18} /> Sair da Conta
                 </button>
               </>
             ) : (
-              <>
-                <button 
-                  onClick={() => { setIsOpen(false); navigate("/login"); }}
-                  className="w-full inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl text-sm transition-all duration-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 bg-gold-gradient text-primary-foreground font-semibold shadow-gold hover:shadow-gold-lg active:translate-y-0 h-12 px-7 py-3 cursor-pointer"
-                >
-                  Entrar
-                </button>
-              </>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsOpen(false)
+                  navigate("/login")
+                }}
+                className="btn-secondary text-base py-3 justify-center w-full"
+              >
+                Entrar no Sistema
+              </button>
             )}
           </div>
         </div>

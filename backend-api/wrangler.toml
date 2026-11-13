@@ -1,4 +1,7 @@
-name = "barbeariadovale"
+# ==============================================================================
+# CLUB 01 BARBER STUDIO - CONFIGURAÇÃO LOCAL E ISOLAMENTO
+# ==============================================================================
+name = "club01-backend-isolated"
 main = "src/index.js"
 compatibility_date = "2024-04-03"
 
@@ -11,7 +14,10 @@ bindings = [
 tag = "v1"
 new_sqlite_classes = ["AppointmentScheduler"]
 
-[[d1_databases]]
-binding = "DB"
-database_name = "barbearia-d1"
-database_id = "0b548ecb-8b1b-4bc4-8ed1-0128845baa73"
+# ------------------------------------------------------------------------------
+# ATENÇÃO / SEGURANÇA (FASE 1 - ISOLAMENTO):
+# Qualquer associação com o banco Cloudflare D1 de produção da Barbearia do Vale
+# foi completamente removida deste projeto.
+# O banco de dados do CLUB 01 será configurado de forma independente em
+# Supabase PostgreSQL na Fase 2.
+# ------------------------------------------------------------------------------

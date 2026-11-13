@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react"
 import { X, ReceiptText, DollarSign, CreditCard, Banknote, Zap, AlertTriangle, CheckCircle2, RotateCcw, Lock } from "lucide-react"
-import { API_URL } from "../context/AuthContext.jsx"
+import { caixaApi } from "../lib/api.js"
 
 const PAYMENT_METHODS = [
   { id: "DINHEIRO", label: "Dinheiro", icon: Banknote, color: "hover:border-emerald-500 hover:text-emerald-400" },
@@ -13,7 +13,6 @@ export default function CaixaEntryModal({
   isOpen,
   onClose,
   appointment,
-  token,
   onSaveSuccess
 }) {
   const [paymentMethod, setPaymentMethod] = useState("")
@@ -80,23 +79,23 @@ export default function CaixaEntryModal({
     }
 
     try {
-      const caixaId = appointment.caixa_id || `cx-srv-${appointment.id}`
-
-      const res = await fetch(`${API_URL}/api/caixa/${caixaId}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({
+      let savedEntry
+      if (appointment.caixa_id) {
+        savedEntry = await caixaApi.update(appointment.caixa_id, {
           amount: numAmount,
           payment_method: paymentMethod || null
         })
-      })
-
-      const data = await res.json()
-      if (!res.ok) {
-        throw new Error(data.error || "Erro ao atualizar lançamento do caixa.")
+      } else {
+        savedEntry = await caixaApi.create({
+          type: "receita",
+          description: `Atendimento - ${appointment.client_name || "Cliente"}`,
+          amount: numAmount,
+          category: "Serviços",
+          payment_method: paymentMethod || null,
+          appointment_id: appointment.id,
+          barber_id: appointment.barber_id || null,
+          date: appointment.appointment_time ? appointment.appointment_time.split("T")[0] : new Date().toISOString().split("T")[0]
+        })
       }
 
       setSuccess("Lançamento do caixa atualizado com sucesso!")
@@ -104,7 +103,7 @@ export default function CaixaEntryModal({
       if (onSaveSuccess) {
         onSaveSuccess({
           appointmentId: appointment.id,
-          caixa_id: caixaId,
+          caixa_id: savedEntry?.id || appointment.caixa_id,
           amount: numAmount,
           payment_method: paymentMethod || null
         })
@@ -122,11 +121,11 @@ export default function CaixaEntryModal({
 
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[80] p-4 animate-fade-in">
-      <div className="bg-[#1c1c20]/95 backdrop-blur-xl w-full max-w-lg border border-primary/30 rounded-2xl p-6 md:p-8 shadow-2xl relative animate-scale-in max-h-[90vh] overflow-y-auto">
+      <div className="bg-card w-full max-w-lg border border-border rounded-2xl p-6 md:p-8 shadow-2xl relative animate-scale-in max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="flex items-center justify-between mb-6 border-b border-border/40 pb-4">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-primary/15 border border-primary/40 flex items-center justify-center text-primary">
+            <div className="w-10 h-10 rounded-xl bg-primary/10 border border-border flex items-center justify-center text-primary">
               <ReceiptText size={22} />
             </div>
             <div>
@@ -256,7 +255,7 @@ export default function CaixaEntryModal({
             </div>
 
             <div className="relative">
-              <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm font-bold font-mono text-muted-foreground">
+              <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm font-bold font-mono text-muted-foreground pointer-events-none">
                 R$
               </span>
               <input
@@ -281,14 +280,14 @@ export default function CaixaEntryModal({
               type="button"
               onClick={onClose}
               disabled={loading}
-              className="flex-1 py-3 bg-muted/40 hover:bg-muted/60 text-foreground text-xs uppercase tracking-wider font-bold rounded-xl transition-all cursor-pointer border border-border/40"
+              className="btn-secondary flex-1 h-12"
             >
               Cancelar
             </button>
             <button
               type="submit"
               disabled={loading}
-              className="flex-1 py-3 bg-gold-gradient hover:shadow-gold-lg text-primary-foreground text-xs uppercase tracking-wider font-bold rounded-xl transition-all shadow-gold cursor-pointer flex items-center justify-center gap-2"
+              className="btn-primary flex-1 h-12"
             >
               {loading ? (
                 <span>Salvando...</span>

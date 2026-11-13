@@ -44,7 +44,7 @@ CREATE TABLE IF NOT EXISTS whatsapp_logs (
 INSERT INTO services (id, name, description, duration_minutes, price) VALUES
 ('srv-corte', 'Corte de Cabelo', 'Corte clássico com acabamento perfeito realizado pelos nossos profissionais de ponta.', 30, 55.00),
 ('srv-barba', 'Barba Completa', 'Barboterapia completa com toalha quente, óleos essenciais e massagem facial.', 30, 45.00),
-('srv-combo', 'Combo Do Vale (Corte + Barba)', 'A experiência completa da Barbearia Do Vale com desconto exclusivo.', 60, 90.00);
+('srv-combo', 'Combo CLUB 01 (Corte + Barba)', 'A experiência completa do CLUB 01 com atendimento exclusivo.', 60, 90.00);
 
 -- Seed de Barbeiros e Administrador
 -- Hash de '123456' com o salt 'barbearia-vale-salt-2026' -> 8a7c29377a064bc3dfb49bbbb6d934bbdbdcf9e1d8825875ea48cd1be49339e8

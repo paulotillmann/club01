@@ -1,14 +1,33 @@
 import React, { useState, useEffect } from "react"
 import { Link, useLocation, useNavigate } from "react-router-dom"
-import { LayoutDashboard, CalendarRange, Users, Scissors, Package, User, Settings, LogOut, ChevronLeft, ChevronRight, Wallet, FileText } from "lucide-react"
+import {
+  LayoutDashboard,
+  CalendarRange,
+  Users,
+  Scissors,
+  Package,
+  User,
+  Settings,
+  LogOut,
+  ChevronLeft,
+  ChevronRight,
+  Wallet,
+  FileText
+} from "lucide-react"
 import { useAuth } from "../context/AuthContext.jsx"
+import { useTheme } from "../context/ThemeContext.jsx"
+import ThemeToggle from "./ThemeToggle.jsx"
+import logoLight from "../assets/club01_white_bg.png"
+import logoDark from "../assets/club01_black_bg.png"
 
 export default function Sidebar() {
   const { user, logout } = useAuth()
+  const { isDark } = useTheme()
+  const logoImg = isDark ? logoDark : logoLight
   const location = useLocation()
   const navigate = useNavigate()
 
-  // Inicia recolhido por padrão
+  // Inicia recolhido por padrão no desktop para otimizar espaço de tela
   const [isCollapsed, setIsCollapsed] = useState(true)
 
   useEffect(() => {
@@ -19,7 +38,7 @@ export default function Sidebar() {
     }
   }, [isCollapsed])
 
-  if (!user || user.role === 'client') return null
+  if (!user || user.role === "client") return null
 
   const baseSidebarOptions = [
     { id: "dashboard", label: "Dashboard", path: "/dashboard", icon: <LayoutDashboard size={20} /> },
@@ -33,87 +52,91 @@ export default function Sidebar() {
   ]
 
   let sidebarOptions = baseSidebarOptions
-  if (user.role === 'admin') {
-    sidebarOptions = [...baseSidebarOptions, { id: "configuracoes", label: "Configurações", path: "/configuracoes", icon: <Settings size={20} /> }]
-  } else if (user.role === 'barber') {
+  if (user.role === "admin") {
+    sidebarOptions = [
+      ...baseSidebarOptions,
+      { id: "configuracoes", label: "Configurações", path: "/configuracoes", icon: <Settings size={20} /> }
+    ]
+  } else if (user.role === "barber") {
     sidebarOptions = [
       { id: "agenda-barbeiros", label: "Agenda Barbeiros", path: "/agenda-barbeiros", icon: <CalendarRange size={20} /> },
       { id: "meu-caixa", label: "Meu Caixa", path: "/meu-caixa", icon: <Wallet size={20} /> },
       { id: "clientes", label: "Clientes", path: "/clientes", icon: <Users size={20} /> }
     ]
-  } else {
-    // Secretário(a)
-    sidebarOptions = baseSidebarOptions
   }
 
   const currentPath = location.pathname
 
-  const mobileOptions = user?.role === 'barber' ? [
-    { id: "agenda-barbeiros", label: "Agenda", path: "/agenda-barbeiros", icon: <CalendarRange size={20} /> },
-    { id: "meu-caixa", label: "Meu Caixa", path: "/meu-caixa", icon: <Wallet size={20} /> },
-    { id: "clientes", label: "Clientes", path: "/clientes", icon: <Users size={20} /> },
-    {
-      id: "logout",
-      label: "Sair",
-      action: () => {
-        logout()
-        navigate("/login")
-      },
-      icon: <LogOut size={20} />
-    }
-  ] : [
-    { id: "dashboard", label: "Painel", path: "/dashboard", icon: <LayoutDashboard size={20} /> },
-    { id: "agenda-barbeiros", label: "Agenda", path: "/agenda-barbeiros", icon: <CalendarRange size={20} /> },
-    { id: "caixa", label: "Caixa", path: "/caixa", icon: <Wallet size={20} /> },
-    { id: "clientes", label: "Clientes", path: "/clientes", icon: <Users size={20} /> },
-    {
-      id: "logout",
-      label: "Sair",
-      action: () => {
-        logout()
-        navigate("/login")
-      },
-      icon: <LogOut size={20} />
-    }
-  ]
+  const mobileOptions = user?.role === "barber"
+    ? [
+        { id: "agenda-barbeiros", label: "Agenda", path: "/agenda-barbeiros", icon: <CalendarRange size={20} /> },
+        { id: "meu-caixa", label: "Meu Caixa", path: "/meu-caixa", icon: <Wallet size={20} /> },
+        { id: "clientes", label: "Clientes", path: "/clientes", icon: <Users size={20} /> },
+        {
+          id: "logout",
+          label: "Sair",
+          action: () => {
+            logout()
+            navigate("/login")
+          },
+          icon: <LogOut size={20} />
+        }
+      ]
+    : [
+        { id: "dashboard", label: "Painel", path: "/dashboard", icon: <LayoutDashboard size={20} /> },
+        { id: "agenda-barbeiros", label: "Agenda", path: "/agenda-barbeiros", icon: <CalendarRange size={20} /> },
+        { id: "caixa", label: "Caixa", path: "/caixa", icon: <Wallet size={20} /> },
+        { id: "clientes", label: "Clientes", path: "/clientes", icon: <Users size={20} /> },
+        {
+          id: "logout",
+          label: "Sair",
+          action: () => {
+            logout()
+            navigate("/login")
+          },
+          icon: <LogOut size={20} />
+        }
+      ]
 
   return (
     <>
       {/* Sidebar Vertical para Telas Grandes (Desktop) */}
-      <aside 
-        className={`hidden lg:flex fixed left-6 top-1/2 -translate-y-1/2 h-[calc(100vh-100px)] sidebar-smooth-transition duration-700 bg-gold-gradient rounded-[48px] shadow-gold-lg flex-col justify-between py-6 z-50 border border-gold-subtle ${
-          isCollapsed ? "w-[88px] px-2.5" : "w-[210px] px-4"
+      <aside
+        className={`hidden lg:flex fixed left-5 top-1/2 -translate-y-1/2 h-[calc(100vh-60px)] bg-card text-card-foreground border border-border shadow-2xl rounded-3xl flex-col justify-between py-5 z-50 transition-all duration-300 ${
+          isCollapsed ? "w-[76px] px-2" : "w-[220px] px-4"
         }`}
       >
         <div className="space-y-4">
-          {/* Cabeçalho do Sidebar com Logo Redimensionável e Botão de Toggle na Borda */}
-          <div className="flex flex-col items-center border-b border-black/10 pb-3 relative">
-            <Link to={user.role === 'barber' ? "/agenda-barbeiros" : "/dashboard"} className="transition-transform duration-700 hover:scale-105 mt-2">
+          {/* Cabeçalho do Sidebar com Logo CLUB 01 e Botão Toggle Abaixo da Logo */}
+          <div className="flex flex-col items-center border-b border-border/70 pb-3 relative">
+            <Link
+              to={user.role === "barber" ? "/agenda-barbeiros" : "/dashboard"}
+              className="transition-transform duration-200 hover:opacity-90 mt-1 flex flex-col items-center w-full"
+              title="CLUB 01 Barber Studio"
+            >
               <img
-                src="/assets/logo-nova-sem-borda.png"
-                alt="Barbearia Do Vale"
-                className={`object-contain sidebar-smooth-transition duration-700 ${
-                  isCollapsed ? "h-[68px] max-w-[72px]" : "h-[115px] w-auto"
+                src={logoImg}
+                alt="CLUB 01 Barber Studio"
+                className={`object-contain transition-all duration-300 ${
+                  isCollapsed ? "w-[60px] h-auto py-1" : "w-[170px] h-auto max-h-[80px]"
                 }`}
               />
             </Link>
 
-            {/* Botão de expansão/recolhimento posicionado na borda direita sobre a linha divisória */}
+            {/* Botão de expansão/recolhimento posicionado na borda direita, ABAIXO da logo sobre a linha divisória */}
             <button
               type="button"
               onClick={() => setIsCollapsed(!isCollapsed)}
-              className={`absolute bottom-0 translate-y-1/2 ${
-                isCollapsed ? "-right-2.5" : "-right-4"
-              } translate-x-1/2 w-7 h-7 rounded-full bg-black text-[#d4af37] border border-[#d4af37]/40 hover:scale-115 active:scale-95 sidebar-smooth-transition duration-300 shadow-md flex items-center justify-center cursor-pointer z-30`}
+              className="absolute -right-5 -bottom-3.5 w-7 h-7 rounded-full bg-card text-foreground border border-border hover:bg-secondary transition-all shadow-md flex items-center justify-center cursor-pointer z-30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               title={isCollapsed ? "Expandir menu" : "Recolher menu"}
-              aria-label={isCollapsed ? "Expandir menu" : "Recolher menu"}
+              aria-label={isCollapsed ? "Expandir menu lateral" : "Recolher menu lateral"}
             >
-              {isCollapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
+              {isCollapsed ? <ChevronRight size={15} /> : <ChevronLeft size={15} />}
             </button>
           </div>
 
-          {/* Opções de Navegação com Animação Fluída de Texto e Ícone Centralizado */}
-          <nav className="space-y-2.5">
+          {/* Opções de Navegação */}
+          <nav className="space-y-1.5">
             {sidebarOptions.filter(opt => opt.id !== "configuracoes").map((opt) => {
               const isSelected = currentPath === opt.path
               return (
@@ -121,106 +144,92 @@ export default function Sidebar() {
                   key={opt.id}
                   to={opt.path}
                   title={opt.label}
-                  className={`flex items-center sidebar-smooth-transition duration-700 overflow-hidden relative ${
-                    isCollapsed 
-                      ? "w-[54px] h-[54px] rounded-full justify-center items-center mx-auto p-0 gap-0" 
-                      : "w-full px-4 py-2.5 rounded-2xl gap-3 text-xs font-bold uppercase tracking-wider"
+                  className={`flex items-center rounded-xl transition-all duration-200 ${
+                    isCollapsed
+                      ? "w-11 h-11 justify-center mx-auto"
+                      : "w-full px-3.5 py-2.5 gap-3 text-xs font-semibold uppercase tracking-wider"
                   } ${
-                    isSelected 
-                      ? "bg-black text-[#d4af37] shadow-md scale-105" 
-                      : "text-black/80 hover:bg-black/10 hover:text-black hover:scale-105"
+                    isSelected
+                      ? "bg-primary text-primary-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground hover:bg-secondary"
                   }`}
                 >
                   <span className="shrink-0 flex items-center justify-center">{opt.icon}</span>
-                  <span className={`truncate sidebar-smooth-transition duration-700 transition-all ${
-                    isCollapsed 
-                      ? "max-w-0 opacity-0 translate-x-2 pointer-events-none absolute left-14" 
-                      : "max-w-[140px] opacity-100 translate-x-0 relative left-0"
-                  }`}>
-                    {opt.label}
-                  </span>
+                  {!isCollapsed && <span className="truncate">{opt.label}</span>}
                 </Link>
               )
             })}
           </nav>
         </div>
 
-        {/* Rodapé do Sidebar com Transição Suave Cruzada */}
-        <div className="border-t border-black/10 pt-3 flex flex-col gap-2 relative min-h-[85px] justify-center">
-          {/* Rodapé Expandido */}
-          <div className={`sidebar-smooth-transition duration-700 flex flex-col gap-2 ${
-            isCollapsed ? "opacity-0 pointer-events-none absolute inset-x-0 bottom-0 scale-95" : "opacity-100 relative scale-100"
-          }`}>
-            <Link 
-              to="/meu-perfil" 
-              title="Clique para editar seu perfil"
-              className="text-center group block hover:opacity-80 transition-all cursor-pointer p-1 rounded-xl hover:bg-black/10"
-            >
-              <div className="text-[10px] font-bold text-black truncate max-w-[170px] mx-auto group-hover:underline">
-                {user.name}
-              </div>
-              <div className="text-[8px] font-extrabold text-black/60 uppercase tracking-widest mt-0.5">
-                {user.role === 'admin' ? 'Administrador' : user.role === 'barber' ? 'Barbeiro' : 'Secretário(a)'}
-              </div>
-            </Link>
-            {user.role === 'admin' && (
-              <Link
-                to="/configuracoes"
-                className={`w-[128px] mx-auto py-2 flex items-center justify-center gap-1.5 text-[10px] font-extrabold uppercase tracking-wider rounded-xl sidebar-smooth-transition duration-700 border ${
-                  currentPath === "/configuracoes"
-                    ? "bg-black text-[#d4af37] border-black shadow-md"
-                    : "bg-black/15 hover:bg-black text-black hover:text-[#d4af37] border-black/5 hover:border-black"
-                }`}
-              >
-                <Settings size={12} /> Configurações
-              </Link>
-            )}
-            <button
-              type="button"
-              onClick={() => {
-                logout()
-                navigate("/login")
-              }}
-              className="w-[128px] mx-auto mt-0.5 py-2 flex items-center justify-center gap-1.5 bg-black/15 hover:bg-black text-black hover:text-[#d4af37] text-[10px] font-extrabold uppercase tracking-wider rounded-xl sidebar-smooth-transition duration-700 border border-black/5 hover:border-black cursor-pointer hover:scale-102"
-            >
-              <LogOut size={12} /> Sair
-            </button>
+        {/* Rodapé do Sidebar */}
+        <div className="border-t border-border/70 pt-3 flex flex-col gap-2">
+          {/* Alternador de Tema */}
+          <div className="flex justify-center pb-1">
+            <ThemeToggle compact={isCollapsed} className="w-full justify-center" />
           </div>
 
-          {/* Rodapé Recolhido */}
-          <div className={`sidebar-smooth-transition duration-700 flex flex-col items-center gap-2 ${
-            isCollapsed ? "opacity-100 relative scale-100" : "opacity-0 pointer-events-none absolute inset-x-0 bottom-0 scale-95"
-          }`}>
-            {user.role === 'admin' && (
-              <Link
-                to="/configuracoes"
-                title="Configurações"
-                className={`w-[54px] h-[54px] rounded-full flex items-center justify-center sidebar-smooth-transition duration-700 border ${
-                  currentPath === "/configuracoes"
-                    ? "bg-black text-[#d4af37] border-black shadow-md scale-105"
-                    : "bg-black/15 hover:bg-black text-black hover:text-[#d4af37] border-black/5"
-                }`}
-              >
-                <Settings size={22} />
-              </Link>
-            )}
-            <button
-              type="button"
-              onClick={() => {
-                logout()
-                navigate("/login")
-              }}
-              title="Sair"
-              className="w-[54px] h-[54px] rounded-full flex items-center justify-center bg-black/15 hover:bg-black text-black hover:text-[#d4af37] sidebar-smooth-transition duration-700 border border-black/5 cursor-pointer hover:scale-105"
+          {/* Perfil do Usuário */}
+          {!isCollapsed && (
+            <Link
+              to="/meu-perfil"
+              title="Editar Perfil"
+              className="text-center block p-1.5 rounded-lg hover:bg-secondary transition-colors"
             >
-              <LogOut size={22} />
-            </button>
-          </div>
+              <div className="text-xs font-semibold text-foreground truncate max-w-[180px] mx-auto">
+                {user.name}
+              </div>
+              <div className="text-[10px] font-medium text-muted-foreground uppercase tracking-widest mt-0.5">
+                {user.role === "admin"
+                  ? "Administrador"
+                  : user.role === "barber"
+                  ? "Barbeiro"
+                  : "Secretário(a)"}
+              </div>
+            </Link>
+          )}
+
+          {/* Ações Inferiores (Configurações e Logout) */}
+          {user.role === "admin" && (
+            <Link
+              to="/configuracoes"
+              title="Configurações do Sistema"
+              className={`flex items-center rounded-xl transition-all duration-200 ${
+                isCollapsed
+                  ? "w-11 h-11 justify-center mx-auto"
+                  : "w-full px-3.5 py-2 gap-2 text-xs font-semibold uppercase tracking-wider"
+              } ${
+                currentPath === "/configuracoes"
+                  ? "bg-primary text-primary-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground hover:bg-secondary"
+              }`}
+            >
+              <Settings size={18} />
+              {!isCollapsed && <span>Configurações</span>}
+            </Link>
+          )}
+
+          <button
+            type="button"
+            onClick={() => {
+              logout()
+              navigate("/login")
+            }}
+            title="Sair do Sistema"
+            className={`flex items-center rounded-xl text-destructive hover:bg-destructive/10 transition-all duration-200 cursor-pointer ${
+              isCollapsed
+                ? "w-11 h-11 justify-center mx-auto"
+                : "w-full px-3.5 py-2 gap-2 text-xs font-semibold uppercase tracking-wider"
+            }`}
+          >
+            <LogOut size={18} />
+            {!isCollapsed && <span>Sair</span>}
+          </button>
         </div>
       </aside>
 
-      {/* Navigation Bar Horizontal para Telas Pequenas (Mobile) - Pílula Flutuante Inferior */}
-      <aside className="lg:hidden fixed bottom-4 left-4 right-4 h-16 bg-gold-gradient rounded-full shadow-gold-lg flex items-center justify-around px-4 z-50 border border-gold-subtle">
+      {/* Barra de Navegação Inferior para Mobile (Telas < 1024px) */}
+      <aside className="lg:hidden fixed bottom-3 left-3 right-3 h-16 bg-card/95 backdrop-blur-xl border border-border shadow-2xl rounded-2xl flex items-center justify-around px-3 z-50">
         {mobileOptions.map((opt) => {
           const isSelected = opt.path && currentPath === opt.path
           if (opt.action) {
@@ -229,8 +238,9 @@ export default function Sidebar() {
                 key={opt.id}
                 type="button"
                 onClick={opt.action}
-                className="p-3 rounded-full transition-all duration-300 flex flex-col items-center justify-center text-black/70 hover:text-black hover:bg-black/10 cursor-pointer"
+                className="min-w-[44px] min-h-[44px] rounded-xl flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-secondary cursor-pointer transition-colors"
                 title={opt.label}
+                aria-label={opt.label}
               >
                 {opt.icon}
               </button>
@@ -240,12 +250,13 @@ export default function Sidebar() {
             <Link
               key={opt.id}
               to={opt.path}
-              className={`p-3 rounded-full transition-all duration-300 flex flex-col items-center justify-center ${
-                isSelected 
-                  ? "bg-black text-[#d4af37] scale-110 shadow-md" 
-                  : "text-black/70 hover:text-black"
+              className={`min-w-[44px] min-h-[44px] rounded-xl flex items-center justify-center transition-all ${
+                isSelected
+                  ? "bg-primary text-primary-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground hover:bg-secondary"
               }`}
               title={opt.label}
+              aria-label={opt.label}
             >
               {opt.icon}
             </Link>
@@ -255,4 +266,3 @@ export default function Sidebar() {
     </>
   )
 }
-

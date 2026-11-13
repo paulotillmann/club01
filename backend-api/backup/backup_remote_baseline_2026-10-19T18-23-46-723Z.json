@@ -1,0 +1,429 @@
+{
+  "metadata": {
+    "projectId": "mxafltrygwekefewhylh",
+    "timestamp": "2026-10-19T18:24:02.220Z",
+    "engine": "PostgreSQL 17.11 Supabase"
+  },
+  "functions": [
+    {
+      "proname": "book_appointment_atomic",
+      "def": "CREATE OR REPLACE FUNCTION public.book_appointment_atomic(p_client_id text, p_barber_id text, p_service_id text, p_appointment_time text, p_service_ids text[] DEFAULT NULL::text[])\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nDECLARE\n  v_conflict_count INTEGER;\n  v_appointment_id TEXT;\n  v_sid TEXT;\nBEGIN\n  -- Bloqueio contra concorrência: verifica se o barbeiro já tem agendamento ativo nesse horário\n  SELECT COUNT(*) INTO v_conflict_count\n  FROM public.appointments\n  WHERE barber_id = p_barber_id\n    AND appointment_time = p_appointment_time\n    AND status IN ('confirmed', 'pending');\n\n  IF v_conflict_count > 0 THEN\n    RAISE EXCEPTION 'HORARIO_INDISPONIVEL: O profissional já possui um agendamento confirmado ou pendente neste horário.';\n  END IF;\n\n  v_appointment_id := gen_random_uuid()::text;\n\n  -- Inserção atômica do agendamento principal\n  INSERT INTO public.appointments (\n    id, client_id, barber_id, service_id, appointment_time, status\n  ) VALUES (\n    v_appointment_id, p_client_id, p_barber_id, p_service_id, p_appointment_time, 'confirmed'\n  );\n\n  -- Inserção de serviços múltiplos se fornecidos\n  IF p_service_ids IS NOT NULL AND array_length(p_service_ids, 1) > 0 THEN\n    FOREACH v_sid IN ARRAY p_service_ids LOOP\n      INSERT INTO public.appointment_services (appointment_id, service_id)\n      VALUES (v_appointment_id, v_sid)\n      ON CONFLICT DO NOTHING;\n    END LOOP;\n  ELSE\n    -- Garante pelo menos o serviço principal na tabela de múltiplos\n    INSERT INTO public.appointment_services (appointment_id, service_id)\n    VALUES (v_appointment_id, p_service_id)\n    ON CONFLICT DO NOTHING;\n  END IF;\n\n  RETURN jsonb_build_object(\n    'success', true,\n    'appointment_id', v_appointment_id,\n    'status', 'confirmed',\n    'appointment_time', p_appointment_time\n  );\nEND;\n$function$\n",
+      "args": "p_client_id text, p_barber_id text, p_service_id text, p_appointment_time text, p_service_ids text[]"
+    },
+    {
+      "proname": "create_sale_atomic",
+      "def": "CREATE OR REPLACE FUNCTION public.create_sale_atomic(p_appointment_id text, p_customer_id text, p_payment_method text, p_items jsonb, p_register_in_caixa boolean DEFAULT true)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nDECLARE\n  v_sale_id TEXT;\n  v_total NUMERIC(10,2) := 0.00;\n  v_item RECORD;\n  v_item_total NUMERIC(10,2);\nBEGIN\n  v_sale_id := gen_random_uuid()::text;\n\n  -- Calcular total da venda\n  FOR v_item IN SELECT * FROM jsonb_to_recordset(p_items) AS x(product_id TEXT, quantity INTEGER, unit_price NUMERIC) LOOP\n    v_total := v_total + (v_item.quantity * v_item.unit_price);\n  END LOOP;\n\n  -- Criar venda\n  INSERT INTO public.sales (id, appointment_id, customer_id, payment_method, total_amount)\n  VALUES (v_sale_id, p_appointment_id, p_customer_id, p_payment_method, v_total);\n\n  -- Inserir itens (o trigger trigger_sale_item_stock automaticamente atualizará o estoque!)\n  FOR v_item IN SELECT * FROM jsonb_to_recordset(p_items) AS x(product_id TEXT, quantity INTEGER, unit_price NUMERIC) LOOP\n    v_item_total := v_item.quantity * v_item.unit_price;\n    INSERT INTO public.sale_items (id, sale_id, product_id, quantity, unit_price, total_price)\n    VALUES (gen_random_uuid()::text, v_sale_id, v_item.product_id, v_item.quantity, v_item.unit_price, v_item_total);\n  END LOOP;\n\n  -- Lançamento opcional no caixa\n  IF p_register_in_caixa AND v_total > 0 THEN\n    INSERT INTO public.caixa (\n      id, type, description, amount, category, payment_method, appointment_id, date\n    ) VALUES (\n      gen_random_uuid()::text,\n      'receita',\n      'Venda de Produtos (Balcão)',\n      v_total,\n      'Venda de Produtos',\n      p_payment_method,\n      p_appointment_id,\n      to_char(now(), 'YYYY-MM-DD')\n    );\n  END IF;\n\n  RETURN jsonb_build_object(\n    'success', true,\n    'sale_id', v_sale_id,\n    'total_amount', v_total\n  );\nEND;\n$function$\n",
+      "args": "p_appointment_id text, p_customer_id text, p_payment_method text, p_items jsonb, p_register_in_caixa boolean"
+    },
+    {
+      "proname": "current_user_role",
+      "def": "CREATE OR REPLACE FUNCTION public.current_user_role()\n RETURNS text\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\n  SELECT role FROM public.users\n  WHERE auth_user_id = auth.uid() OR id = auth.uid()::text\n  LIMIT 1;\n$function$\n",
+      "args": ""
+    },
+    {
+      "proname": "get_email_by_phone",
+      "def": "CREATE OR REPLACE FUNCTION public.get_email_by_phone(p_phone text)\n RETURNS text\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\n  SELECT email FROM public.users \n  WHERE regexp_replace(phone, '\\D', '', 'g') = regexp_replace(p_phone, '\\D', '', 'g') \n  LIMIT 1;\n$function$\n",
+      "args": "p_phone text"
+    },
+    {
+      "proname": "get_occupied_slots",
+      "def": "CREATE OR REPLACE FUNCTION public.get_occupied_slots()\n RETURNS TABLE(barber_id text, appointment_time text, duration_minutes integer)\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\n  SELECT \n    a.barber_id, \n    a.appointment_time, \n    COALESCE(s.duration_minutes, 30) as duration_minutes\n  FROM public.appointments a\n  LEFT JOIN public.services s ON a.service_id = s.id\n  WHERE a.status IN ('confirmed', 'pending');\n$function$\n",
+      "args": ""
+    },
+    {
+      "proname": "handle_new_auth_user",
+      "def": "CREATE OR REPLACE FUNCTION public.handle_new_auth_user()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nBEGIN\n  INSERT INTO public.users (id, auth_user_id, name, email, phone, role)\n  VALUES (\n    NEW.id::text,\n    NEW.id,\n    COALESCE(NEW.raw_user_meta_data->>'name', NEW.email, 'Usuário'),\n    NEW.email,\n    NEW.phone,\n    'client' -- Sempre inicia como 'client'. Promoção para admin/secretario/barber é restrita à administração!\n  )\n  ON CONFLICT (id) DO UPDATE\n  SET email = EXCLUDED.email,\n      phone = COALESCE(EXCLUDED.phone, public.users.phone),\n      auth_user_id = EXCLUDED.auth_user_id,\n      updated_at = now();\n  RETURN NEW;\nEND;\n$function$\n",
+      "args": ""
+    },
+    {
+      "proname": "handle_sale_item_stock",
+      "def": "CREATE OR REPLACE FUNCTION public.handle_sale_item_stock()\n RETURNS trigger\n LANGUAGE plpgsql\n SET search_path TO 'public'\nAS $function$\nBEGIN\n  IF (TG_OP = 'INSERT') THEN\n    UPDATE public.products\n    SET stock_quantity = stock_quantity - NEW.quantity,\n        updated_at = now()\n    WHERE id = NEW.product_id;\n    RETURN NEW;\n  ELSIF (TG_OP = 'UPDATE') THEN\n    UPDATE public.products\n    SET stock_quantity = stock_quantity + OLD.quantity - NEW.quantity,\n        updated_at = now()\n    WHERE id = NEW.product_id;\n    RETURN NEW;\n  ELSIF (TG_OP = 'DELETE') THEN\n    UPDATE public.products\n    SET stock_quantity = stock_quantity + OLD.quantity,\n        updated_at = now()\n    WHERE id = OLD.product_id;\n    RETURN OLD;\n  END IF;\n  RETURN NULL;\nEND;\n$function$\n",
+      "args": ""
+    },
+    {
+      "proname": "rls_auto_enable",
+      "def": "CREATE OR REPLACE FUNCTION public.rls_auto_enable()\n RETURNS event_trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\nDECLARE\n  cmd record;\n  tbl name;\nBEGIN\n  FOR cmd IN\n    SELECT *\n    FROM pg_event_trigger_ddl_commands()\n    WHERE command_tag IN ('CREATE TABLE', 'CREATE TABLE AS', 'SELECT INTO')\n      AND object_type IN ('table','partitioned table')\n  LOOP\n     IF cmd.schema_name IS NOT NULL AND cmd.schema_name IN ('public') AND cmd.schema_name NOT IN ('pg_catalog','information_schema') AND cmd.schema_name NOT LIKE 'pg_toast%' AND cmd.schema_name NOT LIKE 'pg_temp%' THEN\n      BEGIN\n        SELECT c.relname INTO tbl FROM pg_catalog.pg_class c WHERE c.oid = cmd.objid;\n        EXECUTE format('alter table if exists %I.%I enable row level security', cmd.schema_name, tbl);\n        RAISE LOG 'rls_auto_enable: enabled RLS on %', cmd.object_identity;\n      EXCEPTION\n        WHEN OTHERS THEN\n          RAISE LOG 'rls_auto_enable: failed to enable RLS on %', cmd.object_identity;\n      END;\n     ELSE\n        RAISE LOG 'rls_auto_enable: skip % (either system schema or not in enforced list: %.)', cmd.object_identity, cmd.schema_name;\n     END IF;\n  END LOOP;\nEND;\n$function$\n",
+      "args": ""
+    },
+    {
+      "proname": "set_current_timestamp_updated_at",
+      "def": "CREATE OR REPLACE FUNCTION public.set_current_timestamp_updated_at()\n RETURNS trigger\n LANGUAGE plpgsql\n SET search_path TO 'public'\nAS $function$\nBEGIN\n  NEW.updated_at = now();\n  RETURN NEW;\nEND;\n$function$\n",
+      "args": ""
+    }
+  ],
+  "triggers": [
+    {
+      "tgname": "trigger_set_appointments_updated_at",
+      "table_name": "appointments",
+      "def": "CREATE TRIGGER trigger_set_appointments_updated_at BEFORE UPDATE ON public.appointments FOR EACH ROW EXECUTE FUNCTION set_current_timestamp_updated_at()"
+    },
+    {
+      "tgname": "trigger_set_barbers_updated_at",
+      "table_name": "barbers",
+      "def": "CREATE TRIGGER trigger_set_barbers_updated_at BEFORE UPDATE ON public.barbers FOR EACH ROW EXECUTE FUNCTION set_current_timestamp_updated_at()"
+    },
+    {
+      "tgname": "trigger_set_caixa_updated_at",
+      "table_name": "caixa",
+      "def": "CREATE TRIGGER trigger_set_caixa_updated_at BEFORE UPDATE ON public.caixa FOR EACH ROW EXECUTE FUNCTION set_current_timestamp_updated_at()"
+    },
+    {
+      "tgname": "trigger_set_customers_updated_at",
+      "table_name": "customers",
+      "def": "CREATE TRIGGER trigger_set_customers_updated_at BEFORE UPDATE ON public.customers FOR EACH ROW EXECUTE FUNCTION set_current_timestamp_updated_at()"
+    },
+    {
+      "tgname": "trigger_set_products_updated_at",
+      "table_name": "products",
+      "def": "CREATE TRIGGER trigger_set_products_updated_at BEFORE UPDATE ON public.products FOR EACH ROW EXECUTE FUNCTION set_current_timestamp_updated_at()"
+    },
+    {
+      "tgname": "trigger_sale_item_stock",
+      "table_name": "sale_items",
+      "def": "CREATE TRIGGER trigger_sale_item_stock AFTER INSERT OR DELETE OR UPDATE ON public.sale_items FOR EACH ROW EXECUTE FUNCTION handle_sale_item_stock()"
+    },
+    {
+      "tgname": "trigger_set_sales_updated_at",
+      "table_name": "sales",
+      "def": "CREATE TRIGGER trigger_set_sales_updated_at BEFORE UPDATE ON public.sales FOR EACH ROW EXECUTE FUNCTION set_current_timestamp_updated_at()"
+    },
+    {
+      "tgname": "trigger_set_services_updated_at",
+      "table_name": "services",
+      "def": "CREATE TRIGGER trigger_set_services_updated_at BEFORE UPDATE ON public.services FOR EACH ROW EXECUTE FUNCTION set_current_timestamp_updated_at()"
+    },
+    {
+      "tgname": "trigger_set_settings_updated_at",
+      "table_name": "settings",
+      "def": "CREATE TRIGGER trigger_set_settings_updated_at BEFORE UPDATE ON public.settings FOR EACH ROW EXECUTE FUNCTION set_current_timestamp_updated_at()"
+    },
+    {
+      "tgname": "trigger_set_users_updated_at",
+      "table_name": "users",
+      "def": "CREATE TRIGGER trigger_set_users_updated_at BEFORE UPDATE ON public.users FOR EACH ROW EXECUTE FUNCTION set_current_timestamp_updated_at()"
+    }
+  ],
+  "policies": [
+    {
+      "schemaname": "public",
+      "tablename": "appointment_services",
+      "policyname": "Leitura de múltiplos serviços de agendamentos",
+      "permissive": "PERMISSIVE",
+      "roles": "{public}",
+      "cmd": "SELECT",
+      "qual": "true",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "appointment_services",
+      "policyname": "Público pode inserir múltiplos serviços no agendamento",
+      "permissive": "PERMISSIVE",
+      "roles": "{public}",
+      "cmd": "INSERT",
+      "qual": null,
+      "with_check": "true"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "appointments",
+      "policyname": "Equipe gerencia agendamentos",
+      "permissive": "PERMISSIVE",
+      "roles": "{public}",
+      "cmd": "ALL",
+      "qual": "((current_user_role() = ANY (ARRAY['admin'::text, 'secretario'::text])) OR ((current_user_role() = 'barber'::text) AND (barber_id IN ( SELECT barbers.id\n   FROM barbers\n  WHERE (barbers.user_id = (auth.uid())::text)))))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "appointments",
+      "policyname": "Público consulta horários ocupados",
+      "permissive": "PERMISSIVE",
+      "roles": "{public}",
+      "cmd": "SELECT",
+      "qual": "((status = ANY (ARRAY['confirmed'::text, 'pending'::text])) OR (auth.role() = 'authenticated'::text))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "appointments",
+      "policyname": "Público pode criar agendamento",
+      "permissive": "PERMISSIVE",
+      "roles": "{public}",
+      "cmd": "INSERT",
+      "qual": null,
+      "with_check": "true"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "barber_services",
+      "policyname": "Admin gerencia especialidades de barbeiros",
+      "permissive": "PERMISSIVE",
+      "roles": "{public}",
+      "cmd": "ALL",
+      "qual": "(current_user_role() = ANY (ARRAY['admin'::text, 'secretario'::text]))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "barber_services",
+      "policyname": "Especialidades de barbeiros visíveis para todos",
+      "permissive": "PERMISSIVE",
+      "roles": "{public}",
+      "cmd": "SELECT",
+      "qual": "true",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "barbers",
+      "policyname": "Admin gerencia barbeiros",
+      "permissive": "PERMISSIVE",
+      "roles": "{public}",
+      "cmd": "ALL",
+      "qual": "(current_user_role() = ANY (ARRAY['admin'::text, 'secretario'::text]))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "barbers",
+      "policyname": "Barbeiros visíveis para todos",
+      "permissive": "PERMISSIVE",
+      "roles": "{public}",
+      "cmd": "SELECT",
+      "qual": "true",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "caixa",
+      "policyname": "Admin e Secretário acessam todo o caixa",
+      "permissive": "PERMISSIVE",
+      "roles": "{public}",
+      "cmd": "ALL",
+      "qual": "(current_user_role() = ANY (ARRAY['admin'::text, 'secretario'::text]))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "caixa",
+      "policyname": "Barbeiro consulta seus próprios lançamentos no caixa",
+      "permissive": "PERMISSIVE",
+      "roles": "{public}",
+      "cmd": "SELECT",
+      "qual": "((current_user_role() = 'barber'::text) AND (barber_id IN ( SELECT barbers.id\n   FROM barbers\n  WHERE (barbers.user_id = (auth.uid())::text))))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "customers",
+      "policyname": "Equipe gerencia clientes",
+      "permissive": "PERMISSIVE",
+      "roles": "{public}",
+      "cmd": "UPDATE",
+      "qual": "(current_user_role() = ANY (ARRAY['admin'::text, 'secretario'::text]))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "customers",
+      "policyname": "Equipe visualiza clientes",
+      "permissive": "PERMISSIVE",
+      "roles": "{public}",
+      "cmd": "SELECT",
+      "qual": "(current_user_role() = ANY (ARRAY['admin'::text, 'secretario'::text, 'barber'::text]))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "customers",
+      "policyname": "Público e autenticado podem cadastrar cliente",
+      "permissive": "PERMISSIVE",
+      "roles": "{public}",
+      "cmd": "INSERT",
+      "qual": null,
+      "with_check": "true"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "products",
+      "policyname": "Admin gerencia produtos",
+      "permissive": "PERMISSIVE",
+      "roles": "{public}",
+      "cmd": "ALL",
+      "qual": "(current_user_role() = 'admin'::text)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "products",
+      "policyname": "Equipe visualiza produtos",
+      "permissive": "PERMISSIVE",
+      "roles": "{public}",
+      "cmd": "SELECT",
+      "qual": "(current_user_role() = ANY (ARRAY['admin'::text, 'secretario'::text, 'barber'::text]))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "sale_items",
+      "policyname": "Admin gerencia itens de venda",
+      "permissive": "PERMISSIVE",
+      "roles": "{public}",
+      "cmd": "ALL",
+      "qual": "(current_user_role() = 'admin'::text)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "sale_items",
+      "policyname": "Equipe insere itens de venda",
+      "permissive": "PERMISSIVE",
+      "roles": "{public}",
+      "cmd": "INSERT",
+      "qual": null,
+      "with_check": "(current_user_role() = ANY (ARRAY['admin'::text, 'secretario'::text, 'barber'::text]))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "sale_items",
+      "policyname": "Equipe visualiza itens de venda",
+      "permissive": "PERMISSIVE",
+      "roles": "{public}",
+      "cmd": "SELECT",
+      "qual": "(current_user_role() = ANY (ARRAY['admin'::text, 'secretario'::text, 'barber'::text]))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "sales",
+      "policyname": "Admin gerencia vendas",
+      "permissive": "PERMISSIVE",
+      "roles": "{public}",
+      "cmd": "ALL",
+      "qual": "(current_user_role() = 'admin'::text)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "sales",
+      "policyname": "Equipe insere vendas",
+      "permissive": "PERMISSIVE",
+      "roles": "{public}",
+      "cmd": "INSERT",
+      "qual": null,
+      "with_check": "(current_user_role() = ANY (ARRAY['admin'::text, 'secretario'::text, 'barber'::text]))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "sales",
+      "policyname": "Equipe visualiza e cria vendas",
+      "permissive": "PERMISSIVE",
+      "roles": "{public}",
+      "cmd": "SELECT",
+      "qual": "(current_user_role() = ANY (ARRAY['admin'::text, 'secretario'::text, 'barber'::text]))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "services",
+      "policyname": "Admin gerencia serviços",
+      "permissive": "PERMISSIVE",
+      "roles": "{public}",
+      "cmd": "ALL",
+      "qual": "(current_user_role() = 'admin'::text)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "services",
+      "policyname": "Serviços públicos visíveis para todos",
+      "permissive": "PERMISSIVE",
+      "roles": "{public}",
+      "cmd": "SELECT",
+      "qual": "((restricted_access = false) OR (auth.role() = 'authenticated'::text))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "settings",
+      "policyname": "Admin atualiza configurações",
+      "permissive": "PERMISSIVE",
+      "roles": "{public}",
+      "cmd": "ALL",
+      "qual": "(current_user_role() = 'admin'::text)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "settings",
+      "policyname": "Configurações públicas para leitura",
+      "permissive": "PERMISSIVE",
+      "roles": "{public}",
+      "cmd": "SELECT",
+      "qual": "true",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "users",
+      "policyname": "Admin gerencia usuários",
+      "permissive": "PERMISSIVE",
+      "roles": "{public}",
+      "cmd": "ALL",
+      "qual": "(current_user_role() = 'admin'::text)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "users",
+      "policyname": "Usuário consulta seu próprio perfil",
+      "permissive": "PERMISSIVE",
+      "roles": "{public}",
+      "cmd": "SELECT",
+      "qual": "((auth_user_id = auth.uid()) OR (current_user_role() = 'admin'::text))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "whatsapp_logs",
+      "policyname": "Admin e Secretário consultam logs de whatsapp",
+      "permissive": "PERMISSIVE",
+      "roles": "{public}",
+      "cmd": "SELECT",
+      "qual": "(current_user_role() = ANY (ARRAY['admin'::text, 'secretario'::text]))",
+      "with_check": null
+    }
+  ],
+  "data": {
+    "appointment_services": [],
+    "appointments": [],
+    "barber_services": [],
+    "barbers": [],
+    "caixa": [],
+    "customers": [],
+    "products": [],
+    "sale_items": [],
+    "sales": [],
+    "services": [],
+    "settings": [
+      {
+        "key": "shop_name",
+        "value": "CLUB 01 Barber Studio",
+        "updated_at": "2026-10-18 20:01:46.501452+00"
+      },
+      {
+        "key": "min_lead_time_minutes",
+        "value": "30",
+        "updated_at": "2026-10-18 20:01:46.501452+00"
+      },
+      {
+        "key": "inactivity_minutes",
+        "value": "5",
+        "updated_at": "2026-10-18 20:01:46.501452+00"
+      }
+    ],
+    "users": [],
+    "whatsapp_logs": []
+  }
+}

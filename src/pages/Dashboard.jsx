@@ -1,6 +1,14 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react"
 import { useNavigate, Link } from "react-router-dom"
-import { useAuth, API_URL } from "../context/AuthContext.jsx"
+import { useAuth } from "../context/AuthContext.jsx"
+import {
+  appointmentsApi,
+  caixaApi,
+  barbersApi,
+  servicesApi,
+  salesApi,
+  customersApi
+} from "../lib/api.js"
 import {
   Wallet,
   TrendingUp,
@@ -65,7 +73,7 @@ function formatDateBR(dateTimeStr) {
 }
 
 export default function Dashboard() {
-  const { user, token } = useAuth()
+  const { user } = useAuth()
   const navigate = useNavigate()
 
   const [appointments, setAppointments] = useState([])
@@ -97,57 +105,31 @@ export default function Dashboard() {
   const [financialViewMode, setFinancialViewMode] = useState("simplificado") // 'simplificado' (padrão) ou 'detalhado'
 
   const loadAllData = useCallback(async () => {
-    if (!token) return
     setLoading(true)
     setError("")
     try {
-      const headers = { Authorization: `Bearer ${token}` }
-
-      const [apptRes, caixaRes, barbRes, srvRes, salesRes, custRes] = await Promise.all([
-        fetch(`${API_URL}/api/appointments`, { headers }),
-        fetch(`${API_URL}/api/caixa`, { headers }),
-        fetch(`${API_URL}/api/barbers`),
-        fetch(`${API_URL}/api/services`),
-        fetch(`${API_URL}/api/sales/all`, { headers }),
-        fetch(`${API_URL}/api/customers`, { headers })
+      const [apptData, caixaData, barbData, srvData, salesData, custData] = await Promise.all([
+        appointmentsApi.getAll(),
+        caixaApi.getAll(),
+        barbersApi.getAll(),
+        servicesApi.getAll(),
+        salesApi.getAll(),
+        customersApi.getAll()
       ])
 
-      if (apptRes.ok) {
-        const apptData = await apptRes.json()
-        setAppointments(apptData || [])
-      }
-
-      if (caixaRes.ok) {
-        const caixaData = await caixaRes.json()
-        setCaixaTransactions(caixaData.transactions || [])
-      }
-
-      if (barbRes.ok) {
-        const barbData = await barbRes.json()
-        setBarbers(barbData || [])
-      }
-
-      if (srvRes.ok) {
-        const srvData = await srvRes.json()
-        setServices(srvData || [])
-      }
-
-      if (salesRes && salesRes.ok) {
-        const salesData = await salesRes.json()
-        setSalesList(salesData || [])
-      }
-
-      if (custRes && custRes.ok) {
-        const custData = await custRes.json()
-        setCustomers(custData || [])
-      }
+      setAppointments(apptData || [])
+      setCaixaTransactions(caixaData?.transactions || caixaData || [])
+      setBarbers(barbData || [])
+      setServices(srvData || [])
+      setSalesList(salesData || [])
+      setCustomers(custData || [])
     } catch (err) {
       console.error("Erro ao carregar dados do Dashboard:", err)
       setError("Falha ao carregar métricas da dashboard.")
     } finally {
       setLoading(false)
     }
-  }, [token])
+  }, [])
 
   useEffect(() => {
     if (!user) {
@@ -967,7 +949,7 @@ export default function Dashboard() {
               {loading && <RefreshCw size={16} className="animate-spin text-primary ml-2" />}
             </h2>
             <p className="text-xs text-muted-foreground mt-1">
-              Indicadores chave, faturamento em tempo real e distribuição dos {services.length > 0 ? services.length : 6} serviços cadastrados na Barbearia Do Vale.
+              Indicadores chave, faturamento em tempo real e distribuição dos {services.length > 0 ? services.length : 6} serviços cadastrados no CLUB 01 Barber Studio.
             </p>
           </div>
 
@@ -994,7 +976,7 @@ export default function Dashboard() {
                             "/assets/neto-barber.jpeg"
                       )
                       return (
-                        <div className="w-6 h-6 rounded-full overflow-hidden border border-gold-subtle shrink-0 bg-background flex items-center justify-center">
+                        <div className="w-6 h-6 rounded-full overflow-hidden border border-border shrink-0 bg-background flex items-center justify-center">
                           {photo ? (
                             <img src={photo} alt={selectedBarberObj?.name} className="w-full h-full object-cover" />
                           ) : (
@@ -1014,7 +996,7 @@ export default function Dashboard() {
               </button>
 
               {isBarberDropdownOpen && (
-                <div className="absolute right-0 top-full mt-1.5 w-64 bg-[#1c1c20] border border-border/80 rounded-2xl shadow-2xl z-[100] overflow-hidden animate-scale-in py-1">
+                <div className="absolute right-0 top-full mt-1.5 w-64 bg-card text-card-foreground border border-border/80 rounded-2xl shadow-2xl z-[100] overflow-hidden animate-scale-in py-1">
                   <div className="px-3.5 py-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground border-b border-border/40">
                     Filtrar por Profissional
                   </div>
@@ -1098,7 +1080,7 @@ export default function Dashboard() {
               </button>
 
               {isMonthPickerOpen && (
-                <div className="absolute right-0 top-full mt-2 w-72 bg-[#1c1c20] border border-border/80 rounded-2xl shadow-2xl z-[100] overflow-hidden animate-scale-in p-4">
+                <div className="absolute right-0 top-full mt-2 w-72 bg-card text-card-foreground border border-border/80 rounded-2xl shadow-2xl z-[100] overflow-hidden animate-scale-in p-4">
                   {/* Cabeçalho do Ano */}
                   <div className="flex items-center justify-between text-foreground mb-3 px-1">
                     <button
@@ -1137,7 +1119,7 @@ export default function Dashboard() {
                             setIsMonthPickerOpen(false)
                           }}
                           className={`py-2 px-3 text-xs font-bold rounded-xl text-center transition-all cursor-pointer ${isSelected
-                              ? "bg-primary text-background font-black shadow-gold scale-105"
+                              ? "bg-foreground text-background font-black shadow-sm scale-105"
                               : "bg-muted/20 hover:bg-muted/50 text-foreground/80 hover:text-foreground border border-transparent hover:border-border/40"
                             }`}
                         >
@@ -1244,7 +1226,7 @@ export default function Dashboard() {
           </div>
 
           {/* KPI 2: Lucro Líquido em Caixa */}
-          <div className={`bg-card/40 backdrop-blur-sm border rounded-2xl p-5 shadow-sm relative overflow-hidden group transition-all ${kpiData.lucroLiquido >= 0 ? "border-gold-subtle" : "border-rose-500/40"
+          <div className={`bg-card/40 backdrop-blur-sm border rounded-2xl p-5 shadow-sm relative overflow-hidden group transition-all ${kpiData.lucroLiquido >= 0 ? "border-border" : "border-rose-500/40"
             }`}>
             <div className="flex items-center justify-between mb-3">
               <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
@@ -1254,7 +1236,7 @@ export default function Dashboard() {
                 <Wallet size={18} />
               </div>
             </div>
-            <div className="font-display font-black text-[32px] text-white">
+            <div className="font-display font-black text-[32px] text-foreground">
               {formatCurrency(kpiData.lucroLiquido)}
             </div>
             <p className="text-[10px] text-muted-foreground mt-1">
@@ -1328,7 +1310,7 @@ export default function Dashboard() {
           <div className="bg-card/40 backdrop-blur-sm border border-border/80 rounded-2xl p-6 shadow-elevated flex flex-col justify-between">
             <div className="flex items-center justify-between mb-4 border-b border-border/40 pb-3 flex-wrap gap-2">
               <div>
-                <h3 className="font-bold text-base text-foreground font-display flex items-center gap-2">
+                <h3 className="font-bold text-[18px] leading-[26px] text-foreground font-display flex items-center gap-2">
                   <TrendingUp size={18} className="text-primary" /> Faturamento Diário
                 </h3>
                 <p className="text-xs text-muted-foreground">
@@ -1372,7 +1354,7 @@ export default function Dashboard() {
           <div className="bg-card/40 backdrop-blur-sm border border-border/80 rounded-2xl p-6 shadow-elevated flex flex-col justify-between">
             <div className="flex items-center justify-between mb-4 border-b border-border/40 pb-3 flex-wrap gap-2">
               <div>
-                <h3 className="font-bold text-base text-foreground font-display flex items-center gap-2">
+                <h3 className="font-bold text-[18px] leading-[26px] text-foreground font-display flex items-center gap-2">
                   <DollarSign size={18} className="text-primary" /> Ticket Médio Diário (Produtos x Serviços)
                 </h3>
                 <p className="text-xs text-muted-foreground">
@@ -1387,7 +1369,7 @@ export default function Dashboard() {
           <div className="bg-card/40 backdrop-blur-sm border border-border/80 rounded-2xl p-6 shadow-elevated flex flex-col justify-between">
             <div className="flex items-center justify-between mb-4 border-b border-border/40 pb-3">
               <div>
-                <h3 className="font-bold text-base text-foreground font-display flex items-center gap-2">
+                <h3 className="font-bold text-[18px] leading-[26px] text-foreground font-display flex items-center gap-2">
                   <Users size={18} className="text-primary" /> Faturamento & Comissões por Barbeiro
                 </h3>
                 <p className="text-xs text-muted-foreground">
@@ -1405,7 +1387,7 @@ export default function Dashboard() {
           <div className="bg-card/40 backdrop-blur-sm border border-border/80 rounded-2xl p-6 shadow-elevated flex flex-col justify-between">
             <div className="flex items-center justify-between mb-4 border-b border-border/40 pb-3">
               <div>
-                <h3 className="font-bold text-base text-foreground font-display flex items-center gap-2">
+                <h3 className="font-bold text-[18px] leading-[26px] text-foreground font-display flex items-center gap-2">
                   <ShoppingBag size={18} className="text-primary" /> Produtos Mais Vendidos
                 </h3>
                 <p className="text-xs text-muted-foreground">
@@ -1420,7 +1402,7 @@ export default function Dashboard() {
           <div className="bg-card/40 backdrop-blur-sm border border-border/80 rounded-2xl p-6 shadow-elevated flex flex-col justify-between">
             <div className="flex items-center justify-between mb-4 border-b border-border/40 pb-3">
               <div>
-                <h3 className="font-bold text-base text-foreground font-display flex items-center gap-2">
+                <h3 className="font-bold text-[18px] leading-[26px] text-foreground font-display flex items-center gap-2">
                   <Scissors size={18} className="text-primary" /> Serviços Mais Vendidos
                 </h3>
                 <p className="text-xs text-muted-foreground">
@@ -1438,11 +1420,11 @@ export default function Dashboard() {
           <div className="bg-card/40 backdrop-blur-sm border border-border/80 rounded-2xl p-6 shadow-elevated flex flex-col justify-between">
             <div className="flex items-center justify-between mb-4 border-b border-border/40 pb-3">
               <div>
-                <h3 className="font-bold text-base text-foreground font-display flex items-center gap-2">
+                <h3 className="font-bold text-[18px] leading-[26px] text-foreground font-display flex items-center gap-2">
                   <Users size={18} className="text-primary" /> Top Clientes (Serviços & Produtos)
                 </h3>
                 <p className="text-xs text-muted-foreground">
-                  Ranking dos clientes que mais investiram em serviços e produtos na Barbearia Do Vale no período.
+                  Ranking dos clientes que mais investiram em serviços e produtos no CLUB 01 Barber Studio no período.
                 </p>
               </div>
             </div>
@@ -1453,7 +1435,7 @@ export default function Dashboard() {
           <div className="bg-card/40 backdrop-blur-sm border border-border/80 rounded-2xl p-6 shadow-elevated flex flex-col justify-between">
             <div className="flex items-center justify-between mb-4 border-b border-border/40 pb-3 gap-2">
               <div>
-                <h3 className="font-bold text-base text-foreground font-display flex items-center gap-2">
+                <h3 className="font-bold text-[18px] leading-[26px] text-foreground font-display flex items-center gap-2">
                   <PieChartIcon size={18} className="text-primary" /> Serviços vs Produtos
                 </h3>
                 <p className="text-xs text-muted-foreground truncate">
@@ -1481,7 +1463,7 @@ export default function Dashboard() {
           <div className="bg-card/40 backdrop-blur-sm border border-border/80 rounded-2xl p-6 shadow-elevated flex flex-col justify-between">
             <div className="flex items-center justify-between mb-4 border-b border-border/40 pb-3 flex-wrap gap-2">
               <div>
-                <h3 className="font-bold text-base text-foreground font-display flex items-center gap-2">
+                <h3 className="font-bold text-[18px] leading-[26px] text-foreground font-display flex items-center gap-2">
                   <Clock size={18} className="text-primary" /> Próximos Atendimentos do Dia
                 </h3>
                 <p className="text-xs text-muted-foreground">

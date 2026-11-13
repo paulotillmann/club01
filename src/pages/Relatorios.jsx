@@ -1,6 +1,15 @@
 import React, { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
-import { useAuth, API_URL } from "../context/AuthContext.jsx"
+import { useAuth } from "../context/AuthContext.jsx"
+import {
+  customersApi,
+  productsApi,
+  servicesApi,
+  appointmentsApi,
+  barbersApi,
+  caixaApi,
+  salesApi
+} from "../lib/api.js"
 import { 
   FileText, 
   Users, 
@@ -19,7 +28,7 @@ import {
 import Sidebar from "../components/Sidebar.jsx"
 
 export default function Relatorios() {
-  const { user, token } = useAuth()
+  const { user } = useAuth()
   const navigate = useNavigate()
 
   // Estados gerais
@@ -53,57 +62,30 @@ export default function Relatorios() {
     // Carrega dados iniciais da API
     async function loadInitialData() {
       try {
-        const headers = { Authorization: `Bearer ${token}` }
-        
-        // Clientes
-        fetch(`${API_URL}/api/customers`, { headers })
-          .then(res => res.ok ? res.json() : [])
-          .then(data => setCustomersData(Array.isArray(data) ? data : []))
-          .catch(() => {})
+        const [custs, prods, srvs, appts, barbs, cData, sales] = await Promise.all([
+          customersApi.getAll().catch(() => []),
+          productsApi.getAll().catch(() => []),
+          servicesApi.getAll().catch(() => []),
+          appointmentsApi.getAll().catch(() => []),
+          barbersApi.getAll().catch(() => []),
+          caixaApi.getAll().catch(() => ({ transactions: [] })),
+          salesApi.getAll().catch(() => [])
+        ])
 
-        // Produtos
-        fetch(`${API_URL}/api/products`, { headers })
-          .then(res => res.ok ? res.json() : [])
-          .then(data => setProductsData(Array.isArray(data) ? data : []))
-          .catch(() => {})
-
-        // Serviços (para cálculo de valores de atendimentos)
-        fetch(`${API_URL}/api/services`)
-          .then(res => res.ok ? res.json() : [])
-          .then(data => setServicesData(Array.isArray(data) ? data : []))
-          .catch(() => {})
-
-        // Agendamentos
-        fetch(`${API_URL}/api/appointments`, { headers })
-          .then(res => res.ok ? res.json() : [])
-          .then(data => setAppointmentsData(Array.isArray(data) ? data : []))
-          .catch(() => {})
-
-        // Barbeiros
-        fetch(`${API_URL}/api/barbers`, { headers })
-          .then(res => res.ok ? res.json() : [])
-          .then(data => setBarbersData(Array.isArray(data) ? data : []))
-          .catch(() => {})
-
-        // Fluxo de caixa
-        fetch(`${API_URL}/api/caixa`, { headers })
-          .then(res => res.ok ? res.json() : {})
-          .then(data => setCashFlowData(Array.isArray(data.transactions) ? data.transactions : (Array.isArray(data) ? data : [])))
-          .catch(() => {})
-
-        // Vendas de produtos
-        fetch(`${API_URL}/api/sales/all`, { headers })
-          .then(res => res.ok ? res.json() : [])
-          .then(data => setSalesData(Array.isArray(data) ? data : []))
-          .catch(() => {})
-
+        setCustomersData(Array.isArray(custs) ? custs : [])
+        setProductsData(Array.isArray(prods) ? prods : [])
+        setServicesData(Array.isArray(srvs) ? srvs : [])
+        setAppointmentsData(Array.isArray(appts) ? appts : [])
+        setBarbersData(Array.isArray(barbs) ? barbs : [])
+        setCashFlowData(Array.isArray(cData?.transactions) ? cData.transactions : (Array.isArray(cData) ? cData : []))
+        setSalesData(Array.isArray(sales) ? sales : [])
       } catch (err) {
         console.error("Erro ao carregar dados dos relatórios:", err)
       }
     }
 
     loadInitialData()
-  }, [user, token, navigate])
+  }, [user, navigate])
 
   // Helper para obter o valor real de um agendamento / serviço
   const getAppointmentPrice = (a) => {
@@ -819,7 +801,7 @@ export default function Relatorios() {
                   className="bg-muted/30 border border-border/80 hover:border-primary/60 rounded-2xl p-5 hover:bg-card/60 transition-all duration-300 shadow-sm flex items-start gap-4 cursor-pointer group relative overflow-hidden"
                 >
                   {/* Ícone representativo no estilo do modelo em anexo */}
-                  <div className="w-13 h-13 rounded-2xl bg-primary/10 border border-primary/25 text-primary flex items-center justify-center shrink-0 group-hover:bg-gold-gradient group-hover:text-primary-foreground transition-all duration-300 shadow-sm">
+                  <div className="w-13 h-13 rounded-2xl bg-muted/60 border border-border text-foreground flex items-center justify-center shrink-0 group-hover:bg-foreground group-hover:text-background transition-all duration-300 shadow-sm">
                     {report.icon}
                   </div>
 
@@ -852,20 +834,20 @@ export default function Relatorios() {
       {/* MODAL DE VISUALIZAÇÃO E IMPRESSÃO DE RELATÓRIO */}
       {activeReport && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-50 p-4 animate-fade-in">
-          <div className="bg-[#121215] border border-gold-subtle rounded-3xl w-full max-w-6xl max-h-[92vh] flex flex-col shadow-2xl overflow-hidden animate-scale-in">
+          <div className="bg-card border border-border rounded-3xl w-full max-w-6xl max-h-[92vh] flex flex-col shadow-2xl overflow-hidden animate-scale-in">
             
             {/* Modal Header */}
-            <div className="p-6 border-b border-border/80 bg-card/60 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 shrink-0">
+            <div className="p-6 border-b border-border/80 bg-card flex flex-col md:flex-row justify-between items-start md:items-center gap-4 shrink-0">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-gold-gradient text-primary-foreground flex items-center justify-center shrink-0 shadow-md">
+                <div className="w-10 h-10 rounded-xl bg-foreground text-background flex items-center justify-center shrink-0 shadow-md">
                   {reportsList.find(r => r.id === activeReport)?.icon}
                 </div>
                 <div>
-                  <h3 className="text-lg font-bold text-foreground font-display flex items-center gap-2">
+                  <h3 className="font-bold text-[18px] leading-[26px] text-foreground font-display flex items-center gap-2">
                     Relatório de {reportsList.find(r => r.id === activeReport)?.title}
                   </h3>
                   <p className="text-xs text-muted-foreground">
-                    Barbearia Do Vale &bull; Gerado em {new Date().toLocaleDateString('pt-BR')} às {new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                    CLUB 01 Barber Studio &bull; Gerado em {new Date().toLocaleDateString('pt-BR')} às {new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
                   </p>
                 </div>
               </div>
@@ -879,7 +861,7 @@ export default function Relatorios() {
                   className={`flex-1 md:flex-none inline-flex items-center justify-center gap-2 font-bold h-10 px-5 rounded-xl text-xs uppercase tracking-wider transition-all cursor-pointer ${
                     activeReport === "comissao_profissional" && !isCommissionCalculated
                       ? "bg-muted text-muted-foreground opacity-50 cursor-not-allowed border border-border"
-                      : "bg-gold-gradient text-primary-foreground shadow-gold hover:shadow-gold-lg hover:scale-102"
+                      : "btn-primary"
                   }`}
                 >
                   <Printer size={16} /> Imprimir / PDF
@@ -899,13 +881,13 @@ export default function Relatorios() {
             <div className="p-4 bg-muted/20 border-b border-border/60 flex flex-wrap items-center gap-3 text-xs shrink-0">
               {activeReport !== "comissao_profissional" && (
                 <div className="relative flex-1 min-w-[200px]">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground w-3.5 h-3.5" />
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground w-3.5 h-3.5 pointer-events-none" />
                   <input
                     type="text"
                     value={searchFilter}
                     onChange={(e) => setSearchFilter(e.target.value)}
                     placeholder="Filtrar dados..."
-                    className="w-full bg-background/60 border border-border focus:border-primary rounded-xl py-2 pl-9 pr-3 text-xs text-foreground placeholder-muted-foreground focus:outline-none"
+                    className="w-full bg-background/60 border border-border focus:border-primary rounded-xl py-2 pl-10 pr-3 text-xs text-foreground placeholder-muted-foreground focus:outline-none"
                   />
                 </div>
               )}
@@ -964,7 +946,7 @@ export default function Relatorios() {
               <button
                 type="button"
                 onClick={handleGenerateReportData}
-                className="inline-flex items-center justify-center gap-2 bg-gold-gradient text-primary-foreground font-bold px-4 py-2 rounded-xl text-xs uppercase tracking-wider shadow-gold hover:shadow-gold-lg hover:scale-102 transition-all cursor-pointer ml-auto"
+                className="btn-primary inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs uppercase tracking-wider cursor-pointer ml-auto"
               >
                 <Calculator size={15} /> Gerar Dados
               </button>
@@ -980,9 +962,10 @@ export default function Relatorios() {
                 <div className="border-b border-border/80 pb-3 mb-4 print:border-b-2 print:border-black">
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex items-center gap-3">
-                      <img src="/assets/logo-nova-sem-borda.png" alt="Barbearia Do Vale" className="h-12 md:h-14 w-auto object-contain shrink-0" />
+                      <img src="/assets/club01_white_bg.png" alt="CLUB 01 Barber Studio" className="h-12 md:h-14 w-auto object-contain shrink-0 dark:hidden print:block" />
+                      <img src="/assets/club01_black_bg.png" alt="CLUB 01 Barber Studio" className="h-12 md:h-14 w-auto object-contain shrink-0 hidden dark:block print:hidden" />
                       <div>
-                        <h1 className="text-base md:text-lg font-black uppercase tracking-wider text-foreground print:text-black font-display leading-tight">BARBEARIA DO VALE</h1>
+                        <h1 className="text-base md:text-lg font-black uppercase tracking-wider text-foreground print:text-black font-display leading-tight">CLUB 01 BARBER STUDIO</h1>
                         <h2 className="text-[11px] font-bold text-primary print:text-gray-800 uppercase tracking-widest mt-0.5">
                           RELATÓRIO DE {reportsList.find(r => r.id === activeReport)?.title?.toUpperCase()}
                         </h2>
@@ -1558,7 +1541,7 @@ export default function Relatorios() {
 
             {/* Modal Footer */}
             <div className="p-4 bg-card/60 border-t border-border/80 flex justify-between items-center text-xs text-muted-foreground shrink-0 no-print">
-              <span>Barbearia Do Vale &bull; Sistema de Gestão</span>
+              <span>CLUB 01 Barber Studio &bull; Sistema de Gestão</span>
               <button
                 type="button"
                 onClick={() => setActiveReport(null)}

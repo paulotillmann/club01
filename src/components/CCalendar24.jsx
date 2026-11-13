@@ -101,20 +101,20 @@ export default function CCalendar24({ value, onChange }) {
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="group/pick-date flex items-center justify-between gap-2.5 bg-black/50 hover:bg-black/70 border border-gold-subtle text-foreground text-[14pt] font-bold px-3.5 py-1.5 rounded-xl shadow-xs transition-all cursor-pointer focus:outline-none focus:ring-1 focus:ring-primary min-w-[140px]"
+        className="group/pick-date flex items-center justify-between gap-2.5 bg-card hover:bg-muted/60 border border-border text-foreground text-[14pt] font-bold px-3.5 py-1.5 rounded-xl shadow-xs transition-all cursor-pointer focus:outline-none focus:ring-1 focus:ring-foreground min-w-[140px]"
       >
         <span className="font-display font-bold tracking-wide text-foreground text-[14pt]">
           {displayFormattedDate()}
         </span>
         <CalendarIcon
           size={18}
-          className="text-primary opacity-80 group-hover/pick-date:opacity-100 transition-opacity shrink-0"
+          className="text-foreground opacity-80 group-hover/pick-date:opacity-100 transition-opacity shrink-0"
         />
       </button>
 
       {/* Popover com Calendário (c-calendar-24) */}
       {isOpen && (
-        <div className="absolute left-1/2 -translate-x-1/2 sm:right-0 sm:left-auto top-full mt-2 z-[9999] bg-[#1c1c20]/95 backdrop-blur-xl border border-gold-subtle/50 rounded-2xl p-4 shadow-2xl animate-scale-in w-[280px]">
+        <div className="absolute left-1/2 -translate-x-1/2 sm:right-0 sm:left-auto top-full mt-2 z-[9999] bg-card backdrop-blur-xl border border-border rounded-2xl p-4 shadow-2xl animate-scale-in w-[280px]">
           {/* Cabeçalho do Mês e Navegação */}
           <div className="flex items-center justify-between mb-3 pb-2 border-b border-border/40">
             <button
@@ -167,10 +167,10 @@ export default function CCalendar24({ value, onChange }) {
                   onClick={() => handleSelectDay(dayNum)}
                   className={`w-8 h-8 rounded-lg text-xs font-bold flex items-center justify-center transition-all cursor-pointer ${
                     selected
-                      ? "bg-gold-gradient text-black font-black shadow-gold scale-105"
+                      ? "bg-foreground text-background font-black shadow-md scale-105"
                       : todayDay
-                      ? "border border-primary text-primary font-bold hover:bg-primary/20"
-                      : "text-foreground hover:bg-muted/60 hover:text-primary"
+                      ? "border border-foreground text-foreground font-bold hover:bg-muted"
+                      : "text-foreground hover:bg-muted hover:text-foreground"
                   }`}
                 >
                   {dayNum}

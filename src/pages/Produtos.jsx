@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react"
-import { useAuth, API_URL } from "../context/AuthContext.jsx"
+import { useAuth } from "../context/AuthContext.jsx"
+import { productsApi } from "../lib/api.js"
 import { 
   Package, 
   Plus, 
@@ -52,7 +53,7 @@ function ProductThumbnail({ photo, name, onPreview }) {
 }
 
 export default function Produtos() {
-  const { user, token } = useAuth()
+  const { user } = useAuth()
 
   const [products, setProducts] = useState([])
   const [loading, setLoading] = useState(false)
@@ -88,22 +89,15 @@ export default function Produtos() {
   const fetchProducts = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await fetch(`${API_URL}/api/products`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {}
-      })
-      if (res.ok) {
-        const data = await res.json()
-        setProducts(Array.isArray(data) ? data : [])
-      } else {
-        setProducts([])
-      }
+      const data = await productsApi.getAll()
+      setProducts(data || [])
     } catch (err) {
       console.error("Erro ao carregar produtos:", err)
       setProducts([])
     } finally {
       setLoading(false)
     }
-  }, [token])
+  }, [])
 
   useEffect(() => {
     fetchProducts()
@@ -281,48 +275,16 @@ export default function Produtos() {
     }
 
     try {
-      const url = editingProductId 
-        ? `${API_URL}/api/products/${editingProductId}` 
-        : `${API_URL}/api/products`
-      const method = editingProductId ? "PUT" : "POST"
-
-      const res = await fetch(url, {
-        method,
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {})
-        },
-        body: JSON.stringify(payload)
-      })
-
-      if (res.ok) {
-        setSuccessMsg(editingProductId ? "Produto atualizado com sucesso!" : "Produto cadastrado com sucesso!")
-        fetchProducts()
-      } else {
-        // Fallback local se a API não estiver autenticada ou offline
-        const updatedProduct = {
-          id: editingProductId || ('prod-' + Date.now()),
-          ...payload
-        }
-        if (editingProductId) {
-          setProducts(prev => prev.map(p => p.id === editingProductId ? updatedProduct : p))
-        } else {
-          setProducts(prev => [updatedProduct, ...prev])
-        }
-        setSuccessMsg(editingProductId ? "Produto atualizado com sucesso!" : "Produto cadastrado com sucesso!")
-      }
-    } catch {
-      // Fallback local
-      const updatedProduct = {
-        id: editingProductId || ('prod-' + Date.now()),
-        ...payload
-      }
       if (editingProductId) {
-        setProducts(prev => prev.map(p => p.id === editingProductId ? updatedProduct : p))
+        await productsApi.update(editingProductId, payload)
       } else {
-        setProducts(prev => [updatedProduct, ...prev])
+        await productsApi.create(payload)
       }
+
       setSuccessMsg(editingProductId ? "Produto atualizado com sucesso!" : "Produto cadastrado com sucesso!")
+      fetchProducts()
+    } catch (err) {
+      setErrorMsg(err.message || "Erro ao salvar produto.")
     } finally {
       setTimeout(() => {
         setSuccessMsg("")
@@ -346,18 +308,15 @@ export default function Produtos() {
     setSuccessMsg("")
 
     try {
-      await fetch(`${API_URL}/api/products/${id}`, {
-        method: "DELETE",
-        headers: token ? { Authorization: `Bearer ${token}` } : {}
-      })
-    } catch (err) {
-      console.error("Erro ao deletar no servidor:", err)
-    } finally {
+      await productsApi.delete(id)
       setSuccessMsg("Produto excluído com sucesso!")
+      setProducts(prev => prev.filter(p => p.id !== id))
+    } catch (err) {
+      setErrorMsg(err.message || "Erro ao excluir produto.")
+    } finally {
       setTimeout(() => {
         setSuccessMsg("")
       }, 4000)
-      setProducts(prev => prev.filter(p => p.id !== id))
     }
   }
 
@@ -474,7 +433,7 @@ export default function Produtos() {
                     resetForm()
                     setIsModalOpen(true)
                   }}
-                  className="flex items-center justify-center gap-2 bg-gold-gradient hover:shadow-gold-sm text-black font-bold text-xs uppercase tracking-wider py-3 px-5 rounded-xl transition-all self-start md:self-auto shrink-0 cursor-pointer"
+                  className="btn-primary py-3 px-5 flex items-center justify-center gap-2 self-start md:self-auto shrink-0 cursor-pointer"
                 >
                   <Plus size={16} /> Novo Produto
                 </button>
@@ -483,13 +442,13 @@ export default function Produtos() {
 
             {/* Barra de Filtro e Busca */}
             <div className="relative mb-6">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" size={18} />
               <input
                 type="text"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 placeholder="Filtrar por nome do produto, fornecedor ou detalhes..."
-                className="w-full bg-background border border-border/80 focus:border-primary rounded-xl py-3 pl-11 pr-4 text-sm text-foreground focus:outline-none transition-all placeholder:text-muted-foreground/60"
+                className="w-full bg-background border border-border/80 focus:border-primary rounded-xl py-3 pl-12 pr-10 text-sm text-foreground focus:outline-none transition-all placeholder:text-muted-foreground/60"
               />
               {searchTerm && (
                 <button
@@ -668,7 +627,7 @@ export default function Produtos() {
       {/* MODAL DE CONFIRMAÇÃO DE EXCLUSÃO */}
       {confirmModal.isOpen && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
-          <div className="bg-[#1c1c20]/95 backdrop-blur-xl w-full max-w-sm border border-destructive/30 rounded-2xl p-6 md:p-8 shadow-2xl relative animate-scale-in text-center">
+          <div className="bg-card/95 text-card-foreground backdrop-blur-xl w-full max-w-sm border border-destructive/30 rounded-2xl p-6 md:p-8 shadow-2xl relative animate-scale-in text-center">
             <div className="mx-auto w-12 h-12 bg-destructive/10 border border-destructive/25 text-destructive rounded-full flex items-center justify-center mb-4 animate-bounce">
               <AlertTriangle size={24} />
             </div>
@@ -704,7 +663,7 @@ export default function Produtos() {
       {/* MODAL DE INCLUSÃO / EDIÇÃO DE PRODUTOS */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/75 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in overflow-y-auto">
-          <div className="bg-[#1c1c20]/95 backdrop-blur-xl w-full max-w-lg border border-primary/30 rounded-2xl p-6 md:p-8 shadow-2xl relative animate-scale-in my-8">
+          <div className="bg-card/95 text-card-foreground backdrop-blur-xl w-full max-w-lg border border-primary/30 rounded-2xl p-6 md:p-8 shadow-2xl relative animate-scale-in my-8">
             <div className="flex items-center justify-between mb-6 border-b border-border/40 pb-4">
               <h3 className="text-xl font-bold font-display text-primary flex items-center gap-2">
                 {editingProductId ? <Pencil size={20} /> : <Plus size={20} />}
@@ -740,7 +699,7 @@ export default function Produtos() {
                   required
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="Ex: Pomada Modeladora Do Vale 100g"
+                  placeholder="Ex: Pomada Modeladora CLUB 01 100g"
                   className="w-full bg-background border border-border focus:border-primary rounded-xl py-3 px-4 text-sm text-foreground focus:outline-none transition-all"
                 />
               </div>
@@ -913,10 +872,10 @@ export default function Produtos() {
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="flex-1 py-3 px-4 bg-gold-gradient text-black text-xs uppercase tracking-wider font-bold rounded-xl shadow-gold-sm hover:shadow-gold-md transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                  className="btn-primary flex-1 py-3 px-4 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
                 >
                   {submitting ? (
-                    <div className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin"></div>
+                    <div className="w-4 h-4 border-2 border-background border-t-transparent rounded-full animate-spin"></div>
                   ) : editingProductId ? "Salvar Alterações" : "Cadastrar Produto"}
                 </button>
               </div>
@@ -932,7 +891,7 @@ export default function Produtos() {
         >
           <div 
             onClick={(e) => e.stopPropagation()}
-            className="bg-[#1c1c20]/95 backdrop-blur-xl max-w-4xl max-h-[90vh] border border-primary/30 rounded-2xl p-4 md:p-6 shadow-2xl relative animate-scale-in flex flex-col items-center cursor-default"
+            className="bg-card/95 text-card-foreground backdrop-blur-xl max-w-4xl max-h-[90vh] border border-primary/30 rounded-2xl p-4 md:p-6 shadow-2xl relative animate-scale-in flex flex-col items-center cursor-default"
           >
             <div className="flex items-center justify-between w-full mb-4 pb-3 border-b border-border/50">
               <h3 className="text-base font-bold font-display text-primary truncate pr-4">
