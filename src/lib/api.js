@@ -134,7 +134,8 @@ export const barbersApi = {
         hired_at: barber.hired_at || null,
         service_commission: Number(barber.service_commission) || 0,
         product_commission: Number(barber.product_commission) || 0,
-        user_id: barber.user_id || null
+        user_id: barber.user_id || null,
+        is_active: barber.is_active !== false
       })
       .select()
       .single()
@@ -156,19 +157,24 @@ export const barbersApi = {
   },
 
   async update(id, barber, serviceIds = null) {
+    const updateData = {
+      name: barber.name,
+      phone: barber.phone,
+      photo: barber.photo || null,
+      birth_date: barber.birth_date || null,
+      specialty: barber.specialty || null,
+      hired_at: barber.hired_at || null,
+      service_commission: Number(barber.service_commission) || 0,
+      product_commission: Number(barber.product_commission) || 0,
+      user_id: barber.user_id || null
+    }
+    if (barber.is_active !== undefined) {
+      updateData.is_active = Boolean(barber.is_active)
+    }
+
     const { data, error } = await supabase
       .from("barbers")
-      .update({
-        name: barber.name,
-        phone: barber.phone,
-        photo: barber.photo || null,
-        birth_date: barber.birth_date || null,
-        specialty: barber.specialty || null,
-        hired_at: barber.hired_at || null,
-        service_commission: Number(barber.service_commission) || 0,
-        product_commission: Number(barber.product_commission) || 0,
-        user_id: barber.user_id || null
-      })
+      .update(updateData)
       .eq("id", id)
       .select()
       .single()
@@ -181,6 +187,17 @@ export const barbersApi = {
         await supabase.from("barber_services").insert(links)
       }
     }
+    return data
+  },
+
+  async toggleActive(id, isActive) {
+    const { data, error } = await supabase
+      .from("barbers")
+      .update({ is_active: Boolean(isActive) })
+      .eq("id", id)
+      .select()
+      .single()
+    if (error) throw new Error(error.message)
     return data
   },
 
@@ -472,6 +489,8 @@ export const appointmentsApi = {
         msg = 'O horário selecionado não atende à antecedência mínima exigida para remarcação.'
       } else if (msg.includes('PROFISSIONAL_NAO_HABILITADO')) {
         msg = 'O profissional selecionado não realiza um ou mais dos procedimentos escolhidos.'
+      } else if (msg.includes('PROFISSIONAL_INVALIDO')) {
+        msg = 'O profissional selecionado não existe ou não está ativo para atendimentos.'
       } else if (msg.includes('AGENDAMENTO_CANCELADO')) {
         msg = 'Este agendamento já se encontra cancelado e não pode ser remarcado.'
       } else if (msg.includes('AGENDAMENTO_CONCLUIDO')) {
@@ -484,6 +503,25 @@ export const appointmentsApi = {
       throw new Error(msg)
     }
     return data
+  },
+
+  async getFuturePendingByBarber(barberId) {
+    if (!barberId) return []
+    const nowIso = new Date().toISOString()
+    const { data, error } = await supabase
+      .from("appointments")
+      .select("id, appointment_time, status, client_id, customers(name)")
+      .eq("barber_id", barberId)
+      .in("status", ["pending", "confirmed"])
+      .gte("appointment_time", nowIso)
+      .order("appointment_time", { ascending: true })
+    if (error) throw new Error(error.message)
+    return (data || []).map(a => ({
+      id: a.id,
+      appointment_time: a.appointment_time,
+      status: a.status,
+      client_name: a.customers?.name || "Cliente"
+    }))
   },
 
   async deleteServiceCaixa(appointmentId) {

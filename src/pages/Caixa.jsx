@@ -771,7 +771,9 @@ export default function Caixa() {
                     </button>
 
                     {/* Lista de Barbeiros */}
-                    {barbers.map((b, index) => {
+                    {barbers
+                      .filter(b => b.is_active !== false || transactions.some(t => String(t.barber_id) === String(b.id)))
+                      .map((b, index) => {
                       const isSelected = String(selectedBarberFilter) === String(b.id)
                       const photo = b.photo || (
                         index === 0 ? "/assets/marcio-barber.jpeg" :
@@ -1346,9 +1348,11 @@ export default function Caixa() {
                     className="w-full bg-background border border-border focus:border-primary rounded-xl py-3 px-4 text-sm text-foreground focus:outline-none transition-all cursor-pointer"
                   >
                     <option value="">Nenhum / Geral da Barbearia</option>
-                    {barbers.map((b) => (
+                    {barbers
+                      .filter((b) => b.is_active !== false || b.id === formBarberId)
+                      .map((b) => (
                       <option key={b.id} value={b.id}>
-                        {b.name}
+                        {b.name}{b.is_active === false ? " (Inativo)" : ""}
                       </option>
                     ))}
                   </select>

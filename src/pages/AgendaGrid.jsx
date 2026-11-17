@@ -255,15 +255,17 @@ export default function AgendaGrid() {
         if (loadedBarbers) {
           setBarbers(loadedBarbers)
 
-          // Selecionar por padrão o barbeiro do usuário logado se existir, ou o primeiro barbeiro
-          if (loadedBarbers.length > 0) {
-            const userBarber = loadedBarbers.find(
+          // Selecionar por padrão o barbeiro do usuário logado se existir, ou o primeiro barbeiro ativo
+          const activeList = loadedBarbers.filter(b => b.is_active !== false)
+          const candidates = activeList.length > 0 ? activeList : loadedBarbers
+          if (candidates.length > 0) {
+            const userBarber = candidates.find(
               (b) => String(b.id) === String(user?.id) || (b.user_id && String(b.user_id) === String(user?.id))
             )
             if (userBarber) {
               setSelectedMobileBarberId(String(userBarber.id))
             } else {
-              setSelectedMobileBarberId(String(loadedBarbers[0].id))
+              setSelectedMobileBarberId(String(candidates[0].id))
             }
           }
         }
@@ -940,67 +942,74 @@ export default function AgendaGrid() {
           </div>
         )}
 
-        {/* Seletor Rápido de Barbeiro no Mobile */}
-        {isMobile && user?.role !== 'barber' && barbers.length > 1 && (
-          <div className="bg-card border border-border rounded-2xl p-3 shadow-xs flex items-center gap-2 overflow-x-auto custom-scrollbar">
-            <span className="text-xs font-bold text-muted-foreground whitespace-nowrap">Profissional:</span>
-            <div className="flex items-center gap-2">
-              {barbers.map((b, idx) => {
-                const isSel = String(b.id) === String(selectedMobileBarberId) || (b.user_id && String(b.user_id) === String(selectedMobileBarberId))
-                const photo = b.photo || (idx === 0 ? "/assets/marcio-barber.jpeg" : idx === 1 ? "/assets/lucas-barber.jpeg" : "/assets/neto-barber.jpeg")
-                return (
-                  <button
-                    key={b.id}
-                    type="button"
-                    onClick={() => setSelectedMobileBarberId(String(b.id))}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold whitespace-nowrap transition-all cursor-pointer ${isSel
-                        ? "bg-foreground text-background border-foreground shadow-sm"
-                        : "bg-card text-muted-foreground border-border hover:text-foreground"
-                      }`}
-                  >
-                    <img src={photo} alt={b.name} className="w-5 h-5 rounded-full object-cover border border-border" />
-                    <span>{b.name.split(" ")[0]}</span>
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* Componente CEventCalendar2 */}
+        {/* Barbeiros visíveis: ativos na agenda + inativos apenas se possuírem agendamento no dia */}
         {(() => {
-          let displayedBarbers = barbers
+          const visibleBarbers = barbers.filter(
+            b => b.is_active !== false || appointments.some(a => a.barber_id === b.id && a.appointment_time?.startsWith(selectedDate))
+          )
+
+          let displayedBarbers = visibleBarbers
           if (user?.role === 'barber') {
             displayedBarbers = barbers.filter(
               b => String(b.id) === String(user.id) || String(b.user_id) === String(user.id)
             )
           } else if (isMobile) {
             if (selectedMobileBarberId) {
-              const matched = barbers.filter(
+              const matched = visibleBarbers.filter(
                 b => String(b.id) === String(selectedMobileBarberId) || (b.user_id && String(b.user_id) === String(selectedMobileBarberId))
               )
               if (matched.length > 0) displayedBarbers = matched
-              else if (barbers.length > 0) displayedBarbers = [barbers[0]]
-            } else if (barbers.length > 0) {
-              displayedBarbers = [barbers[0]]
+              else if (visibleBarbers.length > 0) displayedBarbers = [visibleBarbers[0]]
+            } else if (visibleBarbers.length > 0) {
+              displayedBarbers = [visibleBarbers[0]]
             }
           }
 
           return (
-            <CEventCalendar2
-              barbers={displayedBarbers}
-              appointments={appointments}
-              sales={salesList}
-              caixaTransactions={caixaList}
-              selectedDate={selectedDate}
-              isMobile={isMobile}
-              userRole={user?.role}
-              onSelectSlot={handleSelectSlot}
-              onCancelSlot={handleOpenCancelRangeModal}
-              onSelectAppointment={handleSelectAppointment}
-              onOpenSaleModal={handleOpenSaleModal}
-              onOpenCaixaModal={handleOpenCaixaModal}
-            />
+            <>
+              {/* Seletor Rápido de Barbeiro no Mobile */}
+              {isMobile && user?.role !== 'barber' && visibleBarbers.length > 1 && (
+                <div className="bg-card border border-border rounded-2xl p-3 shadow-xs flex items-center gap-2 overflow-x-auto custom-scrollbar mb-4">
+                  <span className="text-xs font-bold text-muted-foreground whitespace-nowrap">Profissional:</span>
+                  <div className="flex items-center gap-2">
+                    {visibleBarbers.map((b, idx) => {
+                      const isSel = String(b.id) === String(selectedMobileBarberId) || (b.user_id && String(b.user_id) === String(selectedMobileBarberId))
+                      const photo = b.photo || (idx === 0 ? "/assets/marcio-barber.jpeg" : idx === 1 ? "/assets/lucas-barber.jpeg" : "/assets/neto-barber.jpeg")
+                      return (
+                        <button
+                          key={b.id}
+                          type="button"
+                          onClick={() => setSelectedMobileBarberId(String(b.id))}
+                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold whitespace-nowrap transition-all cursor-pointer ${isSel
+                              ? "bg-foreground text-background border-foreground shadow-sm"
+                              : "bg-card text-muted-foreground border-border hover:text-foreground"
+                            }`}
+                        >
+                          <img src={photo} alt={b.name} className="w-5 h-5 rounded-full object-cover border border-border" />
+                          <span>{b.name.split(" ")[0]}</span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Componente CEventCalendar2 */}
+              <CEventCalendar2
+                barbers={displayedBarbers}
+                appointments={appointments}
+                sales={salesList}
+                caixaTransactions={caixaList}
+                selectedDate={selectedDate}
+                isMobile={isMobile}
+                userRole={user?.role}
+                onSelectSlot={handleSelectSlot}
+                onCancelSlot={handleOpenCancelRangeModal}
+                onSelectAppointment={handleSelectAppointment}
+                onOpenSaleModal={handleOpenSaleModal}
+                onOpenCaixaModal={handleOpenCaixaModal}
+              />
+            </>
           )
         })()}
       </div>
@@ -1043,7 +1052,7 @@ export default function AgendaGrid() {
                   className="w-full bg-background border border-border focus:border-rose-500 rounded-xl py-2.5 px-3 text-xs text-foreground focus:outline-none transition-all"
                 >
                   <option value="">Selecione um profissional</option>
-                  {barbers.map(b => (
+                  {barbers.filter(b => b.is_active !== false).map(b => (
                     <option key={b.id} value={b.id}>{b.name}</option>
                   ))}
                 </select>
@@ -1326,7 +1335,7 @@ export default function AgendaGrid() {
               <div className="space-y-2 mt-2">
                 <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block">Profissional / Barbeiro *</label>
                 <div className="flex flex-wrap gap-2.5">
-                  {barbers.map((barb, index) => {
+                  {barbers.filter(b => b.is_active !== false || b.id === selectedBarber).map((barb, index) => {
                     const isSelected = selectedBarber === barb.id
                     const barberPhoto = barb.photo || (
                       index === 0 ? "/assets/marcio-barber.jpeg" :

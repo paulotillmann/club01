@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
 import { useAuth } from "../context/AuthContext.jsx"
-import { barbersApi, usersApi } from "../lib/api.js"
+import { barbersApi, usersApi, appointmentsApi } from "../lib/api.js"
 import { User, Plus, Pencil, Trash2, CheckCircle2, AlertTriangle, Upload } from "lucide-react"
 import Sidebar from "../components/Sidebar.jsx"
 
@@ -12,6 +12,7 @@ export default function Profissionais() {
   const [barbers, setBarbers] = useState([])
   const [systemUsers, setSystemUsers] = useState([])
   const [loadingBarbers, setLoadingBarbers] = useState(true)
+  const [filterTab, setFilterTab] = useState("todos") // "todos" | "ativos" | "inativos"
   const [isBarberModalOpen, setIsBarberModalOpen] = useState(false)
   const [editingBarberId, setEditingBarberId] = useState(null)
   const [barberName, setBarberName] = useState("")
@@ -23,6 +24,7 @@ export default function Profissionais() {
   const [barberServiceCommission, setBarberServiceCommission] = useState(0)
   const [barberProductCommission, setBarberProductCommission] = useState(0)
   const [barberUserId, setBarberUserId] = useState("")
+  const [barberIsActive, setBarberIsActive] = useState(true)
   const [barberSubmitting, setBarberSubmitting] = useState(false)
   const [barberError, setBarberError] = useState("")
   const [barberSuccess, setBarberSuccess] = useState("")
@@ -32,6 +34,12 @@ export default function Profissionais() {
     title: "",
     message: "",
     onConfirm: null
+  })
+
+  const [pendingWarningModal, setPendingWarningModal] = useState({
+    isOpen: false,
+    barber: null,
+    pendingAppts: []
   })
 
   useEffect(() => {
@@ -91,6 +99,7 @@ export default function Profissionais() {
     setBarberServiceCommission(0)
     setBarberProductCommission(0)
     setBarberUserId("")
+    setBarberIsActive(true)
   }
 
   const handleEditBarberClick = (barb) => {
@@ -104,6 +113,7 @@ export default function Profissionais() {
     setBarberServiceCommission(barb.service_commission ?? 0)
     setBarberProductCommission(barb.product_commission ?? 0)
     setBarberUserId(barb.user_id || "")
+    setBarberIsActive(barb.is_active !== false)
     setIsBarberModalOpen(true)
   }
 
@@ -193,7 +203,8 @@ export default function Profissionais() {
       hired_at: barberHiredAt.trim(),
       service_commission: Number(barberServiceCommission) || 0,
       product_commission: Number(barberProductCommission) || 0,
-      user_id: barberUserId.trim() || null
+      user_id: barberUserId.trim() || null,
+      is_active: barberIsActive
     }
 
     try {
@@ -210,9 +221,9 @@ export default function Profissionais() {
       }, 5000)
 
       if (editingBarberId) {
-        setBarbers(prev => prev.map(b => b.id === editingBarberId ? savedBarber : b))
+        setBarbers(prev => prev.map(b => b.id === editingBarberId ? { ...b, ...savedBarber, is_active: barberIsActive } : b))
       } else {
-        setBarbers(prev => [...prev, savedBarber])
+        setBarbers(prev => [...prev, { ...savedBarber, is_active: barberIsActive }])
       }
 
       setIsBarberModalOpen(false)
@@ -221,6 +232,48 @@ export default function Profissionais() {
       setBarberError(err.message)
     } finally {
       setBarberSubmitting(false)
+    }
+  }
+
+  const handleToggleActiveBarber = async (barb) => {
+    const willDeactivate = barb.is_active !== false
+
+    if (willDeactivate) {
+      try {
+        const pending = await appointmentsApi.getFuturePendingByBarber(barb.id)
+        if (pending && pending.length > 0) {
+          setPendingWarningModal({
+            isOpen: true,
+            barber: barb,
+            pendingAppts: pending
+          })
+          return
+        }
+      } catch (err) {
+        console.warn("Aviso ao verificar agendamentos futuros:", err)
+      }
+    }
+
+    await executeToggleActive(barb.id, !willDeactivate)
+  }
+
+  const executeToggleActive = async (barberId, newActiveStatus) => {
+    setBarberError("")
+    try {
+      await barbersApi.toggleActive(barberId, newActiveStatus)
+      setBarbers(prev =>
+        prev.map(b => (b.id === barberId ? { ...b, is_active: newActiveStatus } : b))
+      )
+      setBarberSuccess(
+        newActiveStatus
+          ? "Profissional ativado na agenda com sucesso!"
+          : "Profissional desativado da agenda com sucesso!"
+      )
+      setTimeout(() => setBarberSuccess(""), 4000)
+    } catch (err) {
+      setBarberError(err.message || "Erro ao alterar status do profissional.")
+    } finally {
+      setPendingWarningModal({ isOpen: false, barber: null, pendingAppts: [] })
     }
   }
 
@@ -278,7 +331,7 @@ export default function Profissionais() {
           )}
 
           <div className="bg-card/40 backdrop-blur-sm border border-border/80 rounded-2xl p-6 md:p-8 shadow-elevated">
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
               <div>
                 <h2 className="text-[18pt] font-bold font-display mb-2 flex items-center gap-2">
                   <User className="text-primary w-6 h-6" /> Profissionais
@@ -300,6 +353,45 @@ export default function Profissionais() {
                 </button>
               )}
             </div>
+
+            {/* Abas de Filtro: Todos, Ativos, Inativos */}
+            {!loadingBarbers && barbers.length > 0 && (
+              <div className="flex items-center gap-2 mb-6 border-b border-border/40 pb-4 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => setFilterTab("todos")}
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer flex items-center gap-2 ${
+                    filterTab === "todos"
+                      ? "bg-primary text-primary-foreground shadow-sm"
+                      : "bg-muted/40 hover:bg-muted text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  Todos <span className="text-[10px] opacity-80 font-mono">({barbers.length})</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFilterTab("ativos")}
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer flex items-center gap-2 ${
+                    filterTab === "ativos"
+                      ? "bg-emerald-500 text-white shadow-sm"
+                      : "bg-muted/40 hover:bg-muted text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  Ativos na Agenda <span className="text-[10px] opacity-80 font-mono">({barbers.filter(b => b.is_active !== false).length})</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFilterTab("inativos")}
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer flex items-center gap-2 ${
+                    filterTab === "inativos"
+                      ? "bg-zinc-600 text-white shadow-sm"
+                      : "bg-muted/40 hover:bg-muted text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  Inativos na Agenda <span className="text-[10px] opacity-80 font-mono">({barbers.filter(b => b.is_active === false).length})</span>
+                </button>
+              </div>
+            )}
             
             {loadingBarbers ? (
               <div className="grid grid-cols-1 sm:grid-cols-[repeat(auto-fill,280px)] gap-5 justify-items-start">
@@ -324,20 +416,73 @@ export default function Profissionais() {
                   <p className="text-xs mt-1 text-muted-foreground/60">Clique em "Novo Profissional" para adicionar.</p>
                 )}
               </div>
+            ) : barbers.filter(b => {
+                if (filterTab === "ativos") return b.is_active !== false
+                if (filterTab === "inativos") return b.is_active === false
+                return true
+              }).length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-12 text-center text-muted-foreground border border-dashed border-border rounded-xl">
+                <User size={36} className="stroke-1 mb-2 text-muted-foreground/30" />
+                <p className="text-xs font-medium">Nenhum profissional encontrado com o filtro "{filterTab}".</p>
+              </div>
             ) : (
             <div className="grid grid-cols-1 sm:grid-cols-[repeat(auto-fill,280px)] gap-5 justify-items-start">
-              {barbers.map((barb, index) => {
+              {barbers
+                .filter(b => {
+                  if (filterTab === "ativos") return b.is_active !== false
+                  if (filterTab === "inativos") return b.is_active === false
+                  return true
+                })
+                .map((barb, index) => {
                 const photo = barb.photo || (
                   index === 0 ? "/assets/marcio-barber.jpeg" :
                   index === 1 ? "/assets/lucas-barber.jpeg" :
                   "/assets/neto-barber.jpeg"
                 )
+                const isActive = barb.is_active !== false
+
                 return (
-                  <div key={barb.id} className="w-full max-w-[280px] bg-muted/20 border border-border/85 rounded-2xl p-6 shadow-md hover:border-primary/40 transition-all duration-300 text-center flex flex-col items-center group relative">
+                  <div
+                    key={barb.id}
+                    className={`w-full max-w-[280px] bg-muted/20 border border-border/85 rounded-2xl p-5 shadow-md hover:border-primary/40 transition-all duration-300 text-center flex flex-col items-center group relative ${
+                      !isActive ? "opacity-75 grayscale-[20%]" : ""
+                    }`}
+                  >
+                    {/* Badge de Status e Quick Toggle */}
+                    <div className="w-full flex items-center justify-between gap-2 mb-3">
+                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider ${
+                        isActive
+                          ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30"
+                          : "bg-zinc-500/20 text-zinc-400 border border-zinc-500/40"
+                      }`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${isActive ? "bg-emerald-400 animate-pulse" : "bg-zinc-400"}`} />
+                        {isActive ? "Atende como Barbeiro" : "Inativo na Agenda"}
+                      </span>
+
+                      {user.role === 'admin' && (
+                        <button
+                          type="button"
+                          role="switch"
+                          aria-checked={isActive}
+                          onClick={() => handleToggleActiveBarber(barb)}
+                          title={isActive ? "Clique para desativar da agenda" : "Clique para ativar na agenda"}
+                          className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                            isActive ? "bg-emerald-500" : "bg-zinc-600"
+                          }`}
+                        >
+                          <span
+                            className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                              isActive ? "translate-x-4" : "translate-x-0"
+                            }`}
+                          />
+                        </button>
+                      )}
+                    </div>
+
                     <div className="relative w-28 h-28 rounded-full overflow-hidden border-2 border-border/80 group-hover:border-primary/50 transition-colors duration-300 shadow-md mb-4 bg-background">
                       <img src={photo} alt={barb.name} className="w-full h-full object-cover object-top scale-102 group-hover:scale-108 transition-transform duration-500" />
                     </div>
-                    <h4 className="font-bold text-[12pt] uppercase tracking-wide text-foreground mt-2">{barb.name}</h4>
+                    <h4 className="font-bold text-[12pt] uppercase tracking-wide text-foreground mt-1">{barb.name}</h4>
                     <span className="text-[10pt] font-bold uppercase tracking-widest text-primary mt-1">{barb.specialty || "Especialista CLUB 01"}</span>
                     
                     <div className="space-y-1.5 text-left w-full text-[10pt] text-muted-foreground border-t border-border/40 pt-4 mt-4 flex-1">
@@ -438,6 +583,62 @@ export default function Profissionais() {
                 className="flex-1 bg-destructive hover:bg-destructive/80 text-white font-bold h-11 rounded-xl text-xs transition-all cursor-pointer shadow-lg hover:shadow-destructive/20"
               >
                 Confirmar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DE ALERTA DE AGENDAMENTOS FUTUROS PENDENTES AO DESATIVAR */}
+      {pendingWarningModal.isOpen && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
+          <div className="bg-card/95 text-card-foreground backdrop-blur-xl w-full max-w-md border border-amber-500/30 rounded-2xl p-6 md:p-8 shadow-2xl relative animate-scale-in text-center">
+            <div className="mx-auto w-12 h-12 bg-amber-500/10 border border-amber-500/25 text-amber-400 rounded-full flex items-center justify-center mb-4">
+              <AlertTriangle size={24} />
+            </div>
+            
+            <h3 className="text-lg font-bold font-display text-foreground mb-2">
+              Desativar {pendingWarningModal.barber?.name}?
+            </h3>
+            
+            <p className="text-xs text-muted-foreground leading-relaxed mb-4">
+              Este profissional possui <strong className="text-amber-400 font-semibold">{pendingWarningModal.pendingAppts.length} agendamento(s) futuro(s)</strong> confirmado(s) ou pendente(s):
+            </p>
+
+            <div className="bg-background/60 border border-border/80 rounded-xl p-3 mb-5 text-left max-h-40 overflow-y-auto space-y-2">
+              {pendingWarningModal.pendingAppts.slice(0, 5).map((app) => (
+                <div key={app.id} className="text-[11px] flex justify-between items-center border-b border-border/30 pb-1.5 last:border-b-0 last:pb-0">
+                  <span className="font-semibold text-foreground truncate max-w-[170px]">{app.client_name}</span>
+                  <span className="text-muted-foreground font-mono">
+                    {app.appointment_time ? app.appointment_time.replace("T", " às ").slice(0, 16) : ""}
+                  </span>
+                </div>
+              ))}
+              {pendingWarningModal.pendingAppts.length > 5 && (
+                <p className="text-[10px] text-center text-muted-foreground italic pt-1">
+                  + {pendingWarningModal.pendingAppts.length - 5} outro(s) agendamento(s)
+                </p>
+              )}
+            </div>
+
+            <p className="text-[11px] text-muted-foreground leading-relaxed mb-6">
+              Ao desativá-lo, <strong className="text-foreground">novos agendamentos não poderão ser realizados com ele</strong> na agenda ou online. Os agendamentos existentes acima serão preservados. Deseja prosseguir com a desativação?
+            </p>
+
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setPendingWarningModal({ isOpen: false, barber: null, pendingAppts: [] })}
+                className="flex-1 border border-border hover:bg-muted text-foreground font-bold h-11 rounded-xl text-xs transition-colors cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => executeToggleActive(pendingWarningModal.barber.id, false)}
+                className="flex-1 bg-amber-500 hover:bg-amber-600 text-black font-bold h-11 rounded-xl text-xs transition-all cursor-pointer shadow-lg hover:shadow-amber-500/20"
+              >
+                Confirmar Desativação
               </button>
             </div>
           </div>
@@ -561,6 +762,46 @@ export default function Profissionais() {
                       </option>
                     ))}
                   </select>
+                </div>
+
+                <div className="space-y-1 sm:col-span-2">
+                  <div className="bg-background/60 border border-border rounded-xl p-4 flex items-center justify-between gap-4">
+                    <div className="space-y-0.5">
+                      <div className="flex items-center gap-2">
+                        <label 
+                          className="text-xs font-bold text-foreground cursor-pointer select-none" 
+                          onClick={() => setBarberIsActive(!barberIsActive)}
+                        >
+                          Atende como Barbeiro / Ativo na Agenda
+                        </label>
+                        <span className={`px-2 py-0.5 text-[9px] font-bold rounded-full uppercase tracking-wider ${
+                          barberIsActive 
+                            ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30' 
+                            : 'bg-zinc-500/20 text-zinc-400 border border-zinc-500/40'
+                        }`}>
+                          {barberIsActive ? 'Ativo' : 'Inativo'}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-muted-foreground leading-normal">
+                        Quando ativado, o profissional fica visível para novos agendamentos online e na agenda do sistema (desktop e mobile).
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={barberIsActive}
+                      onClick={() => setBarberIsActive(!barberIsActive)}
+                      className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                        barberIsActive ? 'bg-emerald-500' : 'bg-muted border border-border'
+                      }`}
+                    >
+                      <span
+                        className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                          barberIsActive ? 'translate-x-5' : 'translate-x-0'
+                        }`}
+                      />
+                    </button>
+                  </div>
                 </div>
 
                 <div className="space-y-1 sm:col-span-2">

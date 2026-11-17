@@ -657,7 +657,9 @@ export default function Agenda() {
                 <div className="flex items-center gap-4 flex-wrap">
                   {/* Filtro por Foto dos Barbeiros */}
                   <div className="flex items-center gap-2 bg-background/30 p-1.5 rounded-2xl border border-border/50 shadow-xs">
-                    {barbers.map((barb, index) => {
+                    {barbers
+                      .filter(b => b.is_active !== false || appointments.some(a => a.barber_id === b.id))
+                      .map((barb, index) => {
                       const isSelected = barberFilter === barb.id
                       const barberPhoto = barb.photo || (
                         index === 0 ? "/assets/marcio-barber.jpeg" :
@@ -1296,7 +1298,9 @@ export default function Agenda() {
               <div className="space-y-2 mt-2">
                 <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block">Profissional / Barbeiro *</label>
                 <div className="flex flex-wrap gap-2.5">
-                  {barbers.map((barb, index) => {
+                  {barbers
+                    .filter(b => b.is_active !== false || b.id === selectedBarber)
+                    .map((barb, index) => {
                     const isSelected = selectedBarber === barb.id
                     const barberPhoto = barb.photo || (
                       index === 0 ? "/assets/marcio-barber.jpeg" :
