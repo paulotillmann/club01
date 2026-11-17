@@ -72,6 +72,24 @@ function formatDateBR(dateTimeStr) {
   return dateTimeStr
 }
 
+function isProdutoCaixa(t) {
+  if (!t || t.type !== "receita") return false
+  const catLower = (t.category || "").toLowerCase()
+  const descLower = (t.description || "").toLowerCase()
+  return (
+    catLower.includes("produto") ||
+    catLower.includes("venda") ||
+    descLower.includes("produto") ||
+    descLower.includes("venda") ||
+    descLower.includes("pomada") ||
+    descLower.includes("óleo") ||
+    descLower.includes("oleo") ||
+    descLower.includes("shampoo") ||
+    descLower.includes("balm") ||
+    (t.id && String(t.id).startsWith("caixa-sale-"))
+  )
+}
+
 export default function Dashboard() {
   const { user } = useAuth()
   const navigate = useNavigate()
@@ -216,8 +234,17 @@ export default function Dashboard() {
       // 1. Filtro por Barbeiro
       if (selectedBarberFilter !== "all") {
         const barbNameClean = selectedBarberObj ? selectedBarberObj.name.trim().toLowerCase() : ""
-        const matchesId = t.barber_id && String(t.barber_id) === String(selectedBarberFilter)
-        const matchesName = barbNameClean && t.barber_name && t.barber_name.trim().toLowerCase().includes(barbNameClean)
+        let tBarberId = t.barber_id
+        let tBarberName = t.barber_name
+        if (!tBarberId && t.appointment_id) {
+          const appt = appointments.find((a) => String(a.id) === String(t.appointment_id))
+          if (appt) {
+            tBarberId = appt.barber_id
+            tBarberName = appt.barber_name
+          }
+        }
+        const matchesId = tBarberId && String(tBarberId) === String(selectedBarberFilter)
+        const matchesName = barbNameClean && tBarberName && tBarberName.trim().toLowerCase().includes(barbNameClean)
         if (!matchesId && !matchesName) return false
       }
 
@@ -243,7 +270,7 @@ export default function Dashboard() {
 
       return true
     })
-  }, [caixaTransactions, selectedBarberFilter, selectedBarberObj, periodFilter, selectedMonth, selectedYear, startDate, endDate])
+  }, [caixaTransactions, appointments, selectedBarberFilter, selectedBarberObj, periodFilter, selectedMonth, selectedYear, startDate, endDate])
 
   // Vendas de produtos filtradas por Período e Barbeiro
   const filteredSales = useMemo(() => {
@@ -317,7 +344,6 @@ export default function Dashboard() {
     const ausentes = apptStatuses.filter((st) => st === "absent").length
 
     const lucroLiquido = totalReceitas - totalDespesas
-    const ticketMedio = concluidos > 0 ? totalReceitas / concluidos : 0
     const taxaEfetividade = totalAgendamentos > 0 ? Math.round((concluidos / totalAgendamentos) * 100) : 100
 
     // Cálculo do Ticket Médio de Produtos Vendidos
@@ -354,25 +380,7 @@ export default function Dashboard() {
     })
 
     filteredCaixa.forEach((t) => {
-      if (t.type !== "receita") return
-      const catLower = (t.category || "").toLowerCase()
-      const descLower = (t.description || "").toLowerCase()
-
-      const isProdutoCategory =
-        catLower.includes("produto") ||
-        catLower.includes("venda") ||
-        (t.id && String(t.id).startsWith("caixa-sale-"))
-
-      const isProdutoDesc =
-        descLower.includes("produto") ||
-        descLower.includes("venda") ||
-        descLower.includes("pomada") ||
-        descLower.includes("óleo") ||
-        descLower.includes("oleo") ||
-        descLower.includes("shampoo") ||
-        descLower.includes("balm")
-
-      if (!isProdutoCategory && !isProdutoDesc) return
+      if (!isProdutoCaixa(t)) return
 
       if (t.id && String(t.id).startsWith("caixa-sale-")) {
         const saleId = String(t.id).replace("caixa-sale-", "")
@@ -389,6 +397,19 @@ export default function Dashboard() {
       totalItensProdutosCount += itemQty
     })
 
+    // Receita de serviços em caixa (todas as receitas que não são produtos)
+    let totalReceitaServicos = 0
+    filteredCaixa.forEach((t) => {
+      if (t.type === "receita" && !isProdutoCaixa(t)) {
+        totalReceitaServicos += Number(t.amount) || 0
+      }
+    })
+
+    // Ticket Médio de Serviços
+    const ticketMedio = concluidos > 0
+      ? (totalReceitaServicos > 0 ? totalReceitaServicos / concluidos : Math.max(0, totalReceitas - totalReceitaProdutos) / concluidos)
+      : (totalReceitaServicos > 0 ? totalReceitaServicos : 0)
+
     const ticketMedioProdutos = totalVendasProdutosCount > 0 ? totalReceitaProdutos / totalVendasProdutosCount : 0
 
     return {
@@ -397,6 +418,7 @@ export default function Dashboard() {
       lucroLiquido,
       ticketMedio,
       ticketMedioProdutos,
+      totalReceitaServicos,
       totalReceitaProdutos,
       totalVendasProdutosCount,
       totalItensProdutosCount,
@@ -431,10 +453,6 @@ export default function Dashboard() {
       }
     }
 
-    // Processar APENAS lançamentos efetivados no caixa.
-    // cx-srv-* = serviços sincronizados automaticamente após o horário do agendamento.
-    // caixa-sale-* = vendas de produtos.
-    // Demais receitas = lançamentos manuais avulsos.
     filteredCaixa.forEach((t) => {
       if (t.type !== "receita" || !t.date) return
 
@@ -442,11 +460,22 @@ export default function Dashboard() {
       const dayParts = dateKey.split("-")
       const formattedLabel = dayParts.length === 3 ? `${dayParts[2]}/${dayParts[1]}` : dateKey
 
-      const barbName = t.barber_name || "Geral"
+      let barbName = t.barber_name
+      if (!barbName && t.barber_id) {
+        barbName = barbers.find((b) => String(b.id) === String(t.barber_id))?.name
+      }
+      if (!barbName && t.appointment_id) {
+        const appt = appointments.find((a) => String(a.id) === String(t.appointment_id))
+        if (appt) {
+          barbName = appt.barber_name || barbers.find((b) => String(b.id) === String(appt.barber_id))?.name
+        }
+      }
+      if (!barbName) barbName = "Venda Balcão / Loja"
+
       initBarberDay(dateKey, formattedLabel, barbName)
 
       const val = Number(t.amount) || 0
-      const isProduto = t.category === "Venda de Produtos" || t.category === "Produto" || (t.id && t.id.startsWith("caixa-sale-"))
+      const isProduto = isProdutoCaixa(t)
 
       if (isProduto) {
         const match = t.description ? t.description.match(/\((\d+)\s+iten/i) || t.description.match(/\((\d+)\s+item/i) : null
@@ -474,7 +503,7 @@ export default function Dashboard() {
       })
       return dayObj
     })
-  }, [barbers, filteredCaixa])
+  }, [barbers, filteredCaixa, appointments])
 
   // 1.5. Dados para o Gráfico do Ticket Médio Diário (Linhas Suaves: Serviços x Produtos)
   const dailyTicketTrendData = useMemo(() => {
@@ -499,7 +528,7 @@ export default function Dashboard() {
       }
 
       const val = Number(t.amount) || 0
-      const isProduto = t.category === "Venda de Produtos" || t.category === "Produto" || (t.id && String(t.id).startsWith("caixa-sale-"))
+      const isProduto = isProdutoCaixa(t)
 
       if (isProduto) {
         daysMap[dateKey].produtosValor += val
@@ -550,17 +579,29 @@ export default function Dashboard() {
       }
     })
 
-    // Apenas lançamentos efetivados no caixa: cx-srv-* = serviços, caixa-sale-* = produtos
     filteredCaixa.forEach((t) => {
       if (t.type !== "receita") return
-      const barbName = t.barber_name || "Geral"
+
+      let barbName = t.barber_name
+      let matchedBarber = null
+
+      if (t.barber_id) {
+        matchedBarber = barbers.find((b) => String(b.id) === String(t.barber_id))
+      }
+      if (!matchedBarber && t.appointment_id) {
+        const appt = appointments.find((a) => String(a.id) === String(t.appointment_id))
+        if (appt) {
+          matchedBarber = barbers.find((b) => String(b.id) === String(appt.barber_id)) ||
+                          barbers.find((b) => b.name && appt.barber_name && b.name.trim().toLowerCase() === appt.barber_name.trim().toLowerCase())
+        }
+      }
+      if (matchedBarber) {
+        barbName = matchedBarber.name
+      } else if (!barbName) {
+        barbName = "Venda Balcão / Loja"
+      }
+
       if (!barbMap[barbName]) {
-        const matchedBarber = barbers.find(
-          (b) =>
-            (b.name && barbName && b.name.trim().toLowerCase().includes(barbName.trim().toLowerCase())) ||
-            (b.name && barbName && barbName.trim().toLowerCase().includes(b.name.trim().toLowerCase())) ||
-            (t.barber_id && String(b.id) === String(t.barber_id))
-        )
         barbMap[barbName] = {
           name: barbName,
           barberId: matchedBarber ? matchedBarber.id : t.barber_id || null,
@@ -578,8 +619,7 @@ export default function Dashboard() {
       }
 
       const val = Number(t.amount) || 0
-      const isServiceSync = t.id && t.id.startsWith("cx-srv-")
-      const isProduto = t.category === "Venda de Produtos" || t.category === "Produto" || (t.id && t.id.startsWith("caixa-sale-"))
+      const isProduto = isProdutoCaixa(t)
 
       if (isProduto) {
         const match = t.description ? t.description.match(/\((\d+)\s+iten/i) || t.description.match(/\((\d+)\s+item/i) : null
@@ -588,8 +628,7 @@ export default function Dashboard() {
         barbMap[barbName].produtosQtd += itemQty
       } else {
         barbMap[barbName].atendimentoValor += val
-        if (isServiceSync) barbMap[barbName].atendimentoQtd += 1
-        else barbMap[barbName].atendimentoQtd += 1
+        barbMap[barbName].atendimentoQtd += 1
       }
 
       barbMap[barbName].faturamento += val
@@ -605,56 +644,165 @@ export default function Dashboard() {
     return Object.values(barbMap).filter(
       (item) => item.faturamento > 0 || item.atendimentoQtd > 0 || item.produtosQtd > 0 || item.comissaoTotal > 0
     )
-  }, [barbers, filteredCaixa])
+  }, [barbers, filteredCaixa, appointments])
 
-  // 3. Dados para o Gráfico de Distribuição dos Serviços (Donut Chart)
+  // 3. Dados para o Gráfico de Distribuição dos Serviços Mais Vendidos
   const servicesDistributionData = useMemo(() => {
     const srvMap = {}
-    const COLORS = ["#FADD00", "#CFBB23", "#A59837", "#7A733D", "#504D35", "#33322B"]
+    const COLORS = [
+      "#FFFFFF",
+      "#E5E7EB",
+      "#D1D5DB",
+      "#9CA3AF",
+      "#6B7280",
+      "#4B5563",
+      "#374151",
+      "#27272A"
+    ]
 
-    // Conjunto de appointment_ids que já têm lançamento de serviço no caixa
-    const caixaApptIds = new Set(
-      filteredCaixa
-        .filter(t => t.id && t.id.startsWith("cx-srv-"))
-        .map(t => t.appointment_id)
-        .filter(Boolean)
-    )
-
-    filteredAppointments.forEach((a) => {
-      if (a.status === "cancelled") return
-      if (!caixaApptIds.has(a.id)) return // só conta se efetivado no caixa
-
-      const svcIds = a.service_ids
-        ? a.service_ids.split(',').filter(Boolean)
-        : (a.service_id ? [a.service_id] : [])
-
-      if (svcIds.length > 0) {
-        svcIds.forEach(svcId => {
-          const srv = services.find(s => s.id === svcId)
-          const srvName = srv ? srv.name : (a.service_name || "Corte Geral")
-          srvMap[srvName] = (srvMap[srvName] || 0) + 1
-        })
-      } else {
-        const srvName = a.service_name || "Corte Geral"
-        srvMap[srvName] = (srvMap[srvName] || 0) + 1
+    // Conjunto de appointment_ids que têm lançamento de serviço no caixa
+    const caixaApptIds = new Set()
+    filteredCaixa.forEach((t) => {
+      if (t.type !== "receita" || isProdutoCaixa(t)) return
+      if (t.appointment_id) caixaApptIds.add(String(t.appointment_id))
+      if (t.id && String(t.id).startsWith("cx-srv-")) {
+        caixaApptIds.add(String(t.id).replace("cx-srv-", ""))
       }
     })
 
-    const result = Object.entries(srvMap).map(([name, value], idx) => ({
-      name,
-      value,
+    // Mapeamentos rápidos para serviços cadastrados
+    const serviceById = new Map()
+    const serviceByName = new Map()
+    services.forEach((s) => {
+      if (s.id) serviceById.set(String(s.id), s)
+      if (s.name) serviceByName.set(s.name.trim().toLowerCase(), s)
+    })
+
+    const processedApptIds = new Set()
+
+    const addService = (name, price = 0) => {
+      if (!name) return
+      const cleanName = name.trim().toUpperCase()
+      if (!srvMap[cleanName]) {
+        srvMap[cleanName] = {
+          name: cleanName,
+          count: 0,
+          totalRevenue: 0
+        }
+      }
+      srvMap[cleanName].count += 1
+      srvMap[cleanName].totalRevenue += Number(price) || 0
+    }
+
+    // 1. Processar agendamentos do período que foram confirmados, concluídos ou lançados no caixa
+    filteredAppointments.forEach((a) => {
+      if (a.status === "cancelled" || a.status === "absent") return
+      const isRealized = a.status === "completed" || a.status === "confirmed"
+      const isInCaixa = caixaApptIds.has(String(a.id))
+      if (!isRealized && !isInCaixa) return
+
+      processedApptIds.add(String(a.id))
+
+      // a) multiple_services
+      if (Array.isArray(a.multiple_services) && a.multiple_services.length > 0) {
+        a.multiple_services.forEach((s) => {
+          const sName = s?.name || "CORTE"
+          const sPrice = Number(s?.price || 0)
+          addService(sName, sPrice)
+        })
+        return
+      }
+
+      // b) service_ids_list ou service_ids
+      const rawIds = a.service_ids_list || a.service_ids || a.service_id
+      const idList = Array.isArray(rawIds)
+        ? rawIds
+        : (typeof rawIds === "string" ? rawIds.split(",").map((s) => s.trim()).filter(Boolean) : [])
+
+      if (idList.length > 0) {
+        let foundAny = false
+        idList.forEach((sId) => {
+          const srv = serviceById.get(String(sId))
+          if (srv) {
+            foundAny = true
+            addService(srv.name, srv.price)
+          }
+        })
+        if (foundAny) return
+      }
+
+      // c) service_name com combo "+" ou "/"
+      if (a.service_name && (a.service_name.includes("+") || a.service_name.includes("/"))) {
+        const parts = a.service_name.split(/\s*[+/]\s*/).filter(Boolean)
+        parts.forEach((p) => {
+          const srv = serviceByName.get(p.trim().toLowerCase())
+          const sName = srv ? srv.name : p.trim().toUpperCase()
+          const sPrice = srv ? Number(srv.price || 0) : 0
+          addService(sName, sPrice)
+        })
+        return
+      }
+
+      // d) Serviço único
+      const srv = serviceById.get(String(a.service_id)) || serviceByName.get(String(a.service_name || "").trim().toLowerCase())
+      const sName = srv ? srv.name : (a.service_name || "CORTE")
+      const sPrice = srv ? Number(srv.price || 0) : Number(a.price || 0)
+      addService(sName, sPrice)
+    })
+
+    // 2. Processar lançamentos de serviços no caixa que não vieram de agendamentos já contados
+    filteredCaixa.forEach((t) => {
+      if (t.type !== "receita" || isProdutoCaixa(t)) return
+      if (t.appointment_id && processedApptIds.has(String(t.appointment_id))) return
+
+      const desc = t.description || ""
+      const matchParen = desc.match(/\(([^)]+)\)/)
+      let servicePart = matchParen ? matchParen[1].trim() : ""
+
+      if (!servicePart) {
+        servicePart = desc
+          .replace(/^atendimento\s*-\s*[^-]+-\s*/i, "")
+          .replace(/^atendimento\s*-\s*/i, "")
+          .trim()
+      }
+
+      const tAmount = Number(t.amount || 0)
+
+      if (servicePart && (servicePart.includes("+") || servicePart.includes("/"))) {
+        const parts = servicePart.split(/\s*[+/]\s*/).filter(Boolean)
+        const partial = parts.length > 0 ? tAmount / parts.length : tAmount
+        parts.forEach((p) => {
+          const srv = serviceByName.get(p.trim().toLowerCase())
+          const sName = srv ? srv.name : p.trim().toUpperCase()
+          const sPrice = srv ? Number(srv.price || 0) : partial
+          addService(sName, sPrice)
+        })
+      } else if (servicePart) {
+        const srv = serviceByName.get(servicePart.toLowerCase())
+        const sName = srv ? srv.name : servicePart.toUpperCase()
+        const sPrice = srv ? Number(srv.price || 0) : tAmount
+        addService(sName, sPrice)
+      } else {
+        addService("CORTE GERAL", tAmount)
+      }
+    })
+
+    const result = Object.values(srvMap).map((item, idx) => ({
+      name: item.name,
+      value: item.count,
+      totalRevenue: item.totalRevenue,
       color: COLORS[idx % COLORS.length]
     }))
 
-    return result
+    return result.sort((a, b) => b.value - a.value)
   }, [filteredAppointments, filteredCaixa, services])
 
   // 4. Métricas para o Gráfico de Distribuição Serviços vs Produtos (Donut Chart)
-  // Soma exclusivamente os lançamentos cx-srv-* efetivados no caixa
+  // Soma os lançamentos de serviços efetivados no caixa
   const servicesTotalFromCaixa = useMemo(() => {
     let sum = 0
     filteredCaixa.forEach((t) => {
-      if (t.type === "receita" && t.id && t.id.startsWith("cx-srv-")) {
+      if (t.type === "receita" && !isProdutoCaixa(t)) {
         sum += Number(t.amount) || 0
       }
     })
@@ -827,13 +975,12 @@ export default function Dashboard() {
 
     const caixaApptPriceMap = new Map()
     filteredCaixa.forEach((t) => {
-      const isProd = t.category === "Venda de Produtos" || t.category === "Produto" || (t.id && t.id.startsWith("caixa-sale-")) || (t.category && t.category.toLowerCase().includes("produto"))
-      if (!isProd) {
-        if (t.appointment_id && !t.id?.startsWith("caixa-sale-")) {
+      if (t.type === "receita" && !isProdutoCaixa(t)) {
+        if (t.appointment_id) {
           caixaApptPriceMap.set(String(t.appointment_id), Number(t.amount || 0))
         }
-        if (t.id && t.id.startsWith("cx-srv-")) {
-          const apptId = t.id.replace("cx-srv-", "")
+        if (t.id && String(t.id).startsWith("cx-srv-")) {
+          const apptId = String(t.id).replace("cx-srv-", "")
           caixaApptPriceMap.set(apptId, Number(t.amount || 0))
         }
       }

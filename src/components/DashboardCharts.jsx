@@ -459,6 +459,9 @@ export function BarberPerformanceChart({ data = [] }) {
 }
 
 export function ServicesDistributionChart({ data = [] }) {
+  const [isModalOpen, setIsModalOpen] = useState(false)
+  const { isDark } = useTheme()
+
   if (!data || data.length === 0) {
     return (
       <div className="h-72 w-full flex flex-col items-center justify-center text-xs text-muted-foreground border border-dashed border-border/60 rounded-2xl bg-muted/10 p-6 space-y-2 text-center animate-fade-in">
@@ -473,35 +476,55 @@ export function ServicesDistributionChart({ data = [] }) {
     )
   }
 
-  const DEFAULT_COLORS = ["#FFFFFF", "#E5E7EB", "#D1D5DB", "#9CA3AF", "#6B7280", "#4B5563"]
+  const DEFAULT_COLORS = isDark
+    ? ["#FFFFFF", "#E5E7EB", "#D1D5DB", "#9CA3AF", "#6B7280", "#4B5563", "#374151", "#27272A"]
+    : ["#18181B", "#27272A", "#374151", "#4B5563", "#52525B", "#6B7280", "#9CA3AF", "#D1D5DB"]
 
-  // Ordenar serviços pelo valor decrescente e limitar aos 6 principais
-  const sortedData = [...data].sort((a, b) => b.value - a.value).slice(0, 6)
+  // Ordenar serviços pelo número de execuções decrescente
+  const sortedData = [...data].sort((a, b) => b.value - a.value)
+  const totalServices = sortedData.reduce((acc, curr) => acc + (Number(curr.value) || 0), 0)
   const maxVal = sortedData[0]?.value || 1
 
-  const processedData = sortedData.map((item, idx) => {
-    const pct = Math.max(12, Math.round((item.value / maxVal) * 82))
-    const color = item.color || DEFAULT_COLORS[idx % DEFAULT_COLORS.length]
-    const isLightColor = ["#FFFFFF", "#E5E7EB", "#D1D5DB"].includes(color)
-    return {
-      ...item,
-      rank: idx + 1,
-      pct,
-      color,
-      isLightColor
-    }
-  })
+  // No card da dashboard exibe até os TOP 6
+  const top6Data = sortedData.slice(0, 6)
 
-  // Separar em 2 colunas para o painel de estatísticas da direita (1, 3, 5 e 2, 4, 6)
-  const col1 = processedData.filter((_, idx) => idx % 2 === 0)
-  const col2 = processedData.filter((_, idx) => idx % 2 === 1)
+  const processItems = (items) => {
+    return items.map((item, idx) => {
+      const barWidth = Math.max(16, Math.min(100, Math.round((item.value / maxVal) * 92)))
+      const realPct = totalServices > 0 ? Math.round((item.value / totalServices) * 100) : 0
+      const color = item.color || DEFAULT_COLORS[idx % DEFAULT_COLORS.length]
+      const isLightColor = ["#FFFFFF", "#E5E7EB", "#D1D5DB", "#9CA3AF"].includes(color)
+      return {
+        ...item,
+        rank: idx + 1,
+        barWidth,
+        realPct,
+        color,
+        isLightColor
+      }
+    })
+  }
+
+  const processedTop6 = processItems(top6Data)
+  const processedAll = processItems(sortedData)
+
+  const col1 = processedTop6.filter((_, idx) => idx % 2 === 0)
+  const col2 = processedTop6.filter((_, idx) => idx % 2 === 1)
 
   return (
     <div className="w-full flex flex-col justify-between h-full pt-1 space-y-4">
-      {/* Botão de Opções / Três Pontos superior direito */}
-      <div className="flex justify-end -mt-2 -mr-1">
-        <button type="button" className="text-muted-foreground hover:text-foreground transition-colors p-1 cursor-pointer">
-          <MoreVertical size={16} />
+      {/* Cabeçalho de Ações: Identificação do Ranking e Botão "Ver todos" */}
+      <div className="flex items-center justify-between -mt-2">
+        <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
+          Top {top6Data.length} Serviços
+        </span>
+        <button
+          type="button"
+          onClick={() => setIsModalOpen(true)}
+          className="text-xs font-bold text-primary hover:text-primary/80 flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-primary/10 border border-primary/20 hover:border-primary/40 transition-all cursor-pointer"
+        >
+          <Maximize2 size={13} />
+          <span>Ver todos ({sortedData.length})</span>
         </button>
       </div>
 
@@ -520,14 +543,14 @@ export function ServicesDistributionChart({ data = [] }) {
 
           {/* Lista de Barras de Serviços com Números de Ranking 1 a 6 */}
           <div className="space-y-2.5 relative z-10 flex-1 flex flex-col justify-between py-1">
-            {processedData.map((item) => (
+            {processedTop6.map((item) => (
               <div key={item.name} className="flex items-center gap-2 h-6.5">
                 <span className="w-4 text-xs font-mono font-bold text-muted-foreground text-center shrink-0">
                   {item.rank}
                 </span>
                 <div className="flex-1 h-full relative flex items-center">
                   <div
-                    style={{ width: `${item.pct}%`, backgroundColor: item.color }}
+                    style={{ width: `${item.barWidth}%`, backgroundColor: item.color }}
                     className="h-full rounded-r-full transition-all duration-500 flex items-center justify-start px-3 shadow-sm border border-black/10 shrink-0 min-w-[70px]"
                   >
                     <span
@@ -538,10 +561,17 @@ export function ServicesDistributionChart({ data = [] }) {
                       {item.name}
                     </span>
                   </div>
-                  {/* Quantidade exibida FORA DA BARRA (9.5pt) */}
-                  <span className="text-[9.5pt] font-black font-mono text-foreground shrink-0 ml-1.5 bg-background/80 border border-border/60 px-1.5 py-0.5 rounded-md shadow-xs">
-                    {item.value} srv
-                  </span>
+                  {/* Quantidade exibida FORA DA BARRA */}
+                  <div className="flex items-center gap-1.5 ml-1.5 shrink-0">
+                    <span className="text-[9.5pt] font-black font-mono text-foreground bg-background/80 border border-border/60 px-1.5 py-0.5 rounded-md shadow-xs">
+                      {item.value} {item.value === 1 ? 'srv' : 'srv'}
+                    </span>
+                    {item.totalRevenue > 0 && (
+                      <span className="text-[9pt] font-bold font-mono text-primary bg-primary/10 border border-primary/20 px-1.5 py-0.5 rounded-md hidden sm:inline-block">
+                        {formatCurrency(item.totalRevenue)}
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
             ))}
@@ -568,7 +598,7 @@ export function ServicesDistributionChart({ data = [] }) {
                   <span className="text-[10px] font-semibold text-muted-foreground leading-tight break-words uppercase">{item.name}</span>
                 </div>
                 <div className="text-xs font-extrabold font-mono text-foreground pl-3.5 flex items-center gap-1">
-                  <span>{item.pct}%</span>
+                  <span>{item.realPct}%</span>
                   <span className="text-[9px] font-normal text-muted-foreground font-sans">({item.value})</span>
                 </div>
               </div>
@@ -584,7 +614,7 @@ export function ServicesDistributionChart({ data = [] }) {
                   <span className="text-[10px] font-semibold text-muted-foreground leading-tight break-words uppercase">{item.name}</span>
                 </div>
                 <div className="text-xs font-extrabold font-mono text-foreground pl-3.5 flex items-center gap-1">
-                  <span>{item.pct}%</span>
+                  <span>{item.realPct}%</span>
                   <span className="text-[9px] font-normal text-muted-foreground font-sans">({item.value})</span>
                 </div>
               </div>
@@ -592,6 +622,114 @@ export function ServicesDistributionChart({ data = [] }) {
           </div>
         </div>
       </div>
+
+      {/* MODAL COMPLETO DE SERVIÇOS MAIS VENDIDOS */}
+      {isModalOpen && typeof document !== "undefined" && createPortal(
+        <div className="fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center z-[99999] p-4 md:p-6 animate-fade-in overflow-y-auto">
+          <div className="bg-card border border-border rounded-2xl p-6 md:p-8 w-full max-w-4xl max-h-[90vh] overflow-y-auto shadow-2xl space-y-6 relative animate-scale-in my-auto">
+            {/* Cabeçalho do Modal */}
+            <div className="flex items-center justify-between border-b border-border/40 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shrink-0">
+                  <Scissors size={22} />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold font-display text-foreground flex items-center gap-2">
+                    Serviços Mais Vendidos (Visão Completa)
+                  </h3>
+                  <p className="text-xs text-muted-foreground">
+                    Ranking consolidado de procedimentos realizados no período ({sortedData.length} {sortedData.length === 1 ? 'tipo' : 'tipos'} • {totalServices} atendimentos totais).
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsModalOpen(false)}
+                className="text-muted-foreground hover:text-foreground p-2 rounded-xl hover:bg-muted/40 transition-colors cursor-pointer"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Conteúdo do Gráfico Completo */}
+            <div className="flex flex-col lg:flex-row items-stretch justify-between gap-8 pt-2">
+              {/* Barras em lista vertical */}
+              <div className="flex-1 space-y-3.5 relative min-h-[300px]">
+                <div className="space-y-3.5 relative z-10">
+                  {processedAll.map((item) => (
+                    <div key={item.name} className="flex items-center gap-3 h-9">
+                      <span className="w-6 text-xs font-mono font-bold text-muted-foreground text-center shrink-0">
+                        #{item.rank}
+                      </span>
+                      <div className="flex-1 h-full relative flex items-center">
+                        <div
+                          style={{ width: `${item.barWidth}%`, backgroundColor: item.color }}
+                          className="h-full rounded-r-full transition-all duration-500 flex items-center justify-between px-4 shadow-sm border border-black/10 min-w-[140px]"
+                        >
+                          <span
+                            className={`text-xs font-bold truncate max-w-[65%] tracking-wide uppercase ${
+                              item.isLightColor ? "text-black" : "text-white"
+                            }`}
+                          >
+                            {item.name}
+                          </span>
+                          <span
+                            className={`text-xs font-mono font-extrabold shrink-0 ml-2 ${
+                              item.isLightColor ? "text-black" : "text-white"
+                            }`}
+                          >
+                            {item.value} srv ({item.realPct}%)
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Tabela Resumo com Percentuais e Totais */}
+              <div className="w-full lg:w-80 shrink-0 bg-background/50 border border-border/50 rounded-xl p-4 space-y-3">
+                <span className="text-xs font-bold uppercase text-muted-foreground tracking-wider block border-b border-border/40 pb-2">
+                  Detalhamento de Serviços
+                </span>
+                <div className="space-y-2.5 max-h-80 overflow-y-auto pr-1">
+                  {processedAll.map((item) => (
+                    <div key={item.name} className="flex items-center justify-between text-xs py-1.5 border-b border-border/20 last:border-0">
+                      <div className="flex items-center gap-2 min-w-0 pr-2">
+                        <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: item.color }} />
+                        <span className="font-semibold text-foreground truncate uppercase">{item.name}</span>
+                      </div>
+                      <div className="text-right font-mono shrink-0">
+                        <div>
+                          <span className="font-bold text-primary">{item.value} srv</span>
+                          <span className="text-muted-foreground text-[10px] ml-1">({item.realPct}%)</span>
+                        </div>
+                        {item.totalRevenue > 0 && (
+                          <div className="text-[10px] text-muted-foreground font-bold">
+                            {formatCurrency(item.totalRevenue)}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Rodapé do Modal */}
+            <div className="flex justify-end pt-4 border-t border-border/40">
+              <button
+                type="button"
+                onClick={() => setIsModalOpen(false)}
+                className="py-2.5 px-6 bg-primary text-background font-black text-xs uppercase tracking-wider rounded-xl hover:bg-primary/90 transition-all cursor-pointer shadow-md"
+              >
+                Fechar
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   )
 }
@@ -670,6 +808,7 @@ export function ProductsDistributionChart({ data = [] }) {
 
   // Ordenar produtos pela quantidade sold decrescente
   const sortedData = [...data].sort((a, b) => b.value - a.value)
+  const totalProducts = sortedData.reduce((acc, curr) => acc + (Number(curr.value) || 0), 0)
   const maxVal = sortedData[0]?.value || 1
 
   // No card do dashboard exibe apenas os TOP 5
@@ -677,13 +816,15 @@ export function ProductsDistributionChart({ data = [] }) {
 
   const processItems = (items) => {
     return items.map((item, idx) => {
-      const pct = Math.max(12, Math.round((item.value / maxVal) * 82))
+      const barWidth = Math.max(16, Math.min(100, Math.round((item.value / maxVal) * 92)))
+      const realPct = totalProducts > 0 ? Math.round((item.value / totalProducts) * 100) : 0
       const color = DEFAULT_COLORS[idx % DEFAULT_COLORS.length]
       const isLightColor = ["#FFFFFF", "#E5E7EB", "#D1D5DB", "#9CA3AF"].includes(color)
       return {
         ...item,
         rank: idx + 1,
-        pct,
+        barWidth,
+        realPct,
         color,
         isLightColor
       }
@@ -735,7 +876,7 @@ export function ProductsDistributionChart({ data = [] }) {
                 </span>
                 <div className="flex-1 h-full relative flex items-center">
                   <div
-                    style={{ width: `${item.pct}%`, backgroundColor: item.color }}
+                    style={{ width: `${item.barWidth}%`, backgroundColor: item.color }}
                     className="h-full rounded-r-full transition-all duration-500 flex items-center justify-start px-3 shadow-sm border border-black/10 shrink-0"
                   >
                     <span
@@ -775,7 +916,7 @@ export function ProductsDistributionChart({ data = [] }) {
                   <span className="text-[10.5px] font-semibold text-muted-foreground leading-tight break-words uppercase">{item.name}</span>
                 </div>
                 <div className="text-sm font-extrabold font-mono text-foreground pl-4 flex items-center gap-1.5">
-                  <span>{item.pct}%</span>
+                  <span>{item.realPct}%</span>
                   <span className="text-[10px] font-normal text-muted-foreground font-sans">({item.value} un)</span>
                 </div>
               </div>
@@ -790,7 +931,7 @@ export function ProductsDistributionChart({ data = [] }) {
                   <span className="text-[10.5px] font-semibold text-muted-foreground leading-tight break-words uppercase">{item.name}</span>
                 </div>
                 <div className="text-sm font-extrabold font-mono text-foreground pl-4 flex items-center gap-1.5">
-                  <span>{item.pct}%</span>
+                  <span>{item.realPct}%</span>
                   <span className="text-[10px] font-normal text-muted-foreground font-sans">({item.value} un)</span>
                 </div>
               </div>
@@ -839,7 +980,7 @@ export function ProductsDistributionChart({ data = [] }) {
                       </span>
                       <div className="flex-1 h-full relative flex items-center">
                         <div
-                          style={{ width: `${item.pct}%`, backgroundColor: item.color }}
+                          style={{ width: `${item.barWidth}%`, backgroundColor: item.color }}
                           className="h-full rounded-r-full transition-all duration-500 flex items-center justify-between px-4 shadow-sm border border-black/10 min-w-[140px]"
                         >
                           <span
@@ -854,7 +995,7 @@ export function ProductsDistributionChart({ data = [] }) {
                               item.isLightColor ? "text-black" : "text-white"
                             }`}
                           >
-                            {item.value} un ({item.pct}%)
+                            {item.value} un ({item.realPct}%)
                           </span>
                         </div>
                       </div>
@@ -877,7 +1018,7 @@ export function ProductsDistributionChart({ data = [] }) {
                       </div>
                       <div className="text-right font-mono shrink-0">
                         <span className="font-bold text-primary">{item.value} un</span>
-                        <span className="text-muted-foreground text-[10px] ml-1">({item.pct}%)</span>
+                        <span className="text-muted-foreground text-[10px] ml-1">({item.realPct}%)</span>
                       </div>
                     </div>
                   ))}
