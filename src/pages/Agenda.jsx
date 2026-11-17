@@ -325,8 +325,8 @@ export default function Agenda() {
 
   // Cálculo acumulado de duração e preço para múltiplos serviços
   const selectedServicesDetails = services.filter(s => selectedServices.includes(s.id))
-  const totalDurationMinutes = selectedServicesDetails.reduce((sum, s) => sum + (s.duration_minutes ?? 30), 0)
-  const totalPriceCalculated = selectedServicesDetails.reduce((sum, s) => sum + (s.price || 0), 0)
+  const totalDurationMinutes = selectedServicesDetails.reduce((sum, s) => sum + Number(s.duration_minutes ?? 30), 0)
+  const totalPriceCalculated = selectedServicesDetails.reduce((sum, s) => sum + Number(s.price || 0), 0)
 
   let calculatedEndTime = ""
   if (selectedTime && (totalDurationMinutes >= 0 && selectedServicesDetails.length > 0)) {
@@ -346,12 +346,18 @@ export default function Agenda() {
   const handleEditAppointmentClick = (appt) => {
     setEditingAppointmentId(appt.id)
     setClientName(appt.client_name || "")
-    setClientPhone(formatPhoneNumber(appt.client_phone || ""))
+    setClientPhone(formatPhoneNumber(appt.client_phone || appt.phone || ""))
     setSelectedBarber(appt.barber_id || "")
 
     let sIds = []
-    if (appt.service_ids) {
-      sIds = typeof appt.service_ids === 'string' ? appt.service_ids.split(',').filter(Boolean) : [appt.service_ids]
+    if (Array.isArray(appt.service_ids_list) && appt.service_ids_list.length > 0) {
+      sIds = appt.service_ids_list
+    } else if (Array.isArray(appt.service_ids) && appt.service_ids.length > 0) {
+      sIds = appt.service_ids
+    } else if (typeof appt.service_ids === 'string' && appt.service_ids.trim()) {
+      sIds = appt.service_ids.split(',').map(s => s.trim()).filter(Boolean)
+    } else if (Array.isArray(appt.multiple_services) && appt.multiple_services.length > 0) {
+      sIds = appt.multiple_services.map(s => s.id).filter(Boolean)
     } else if (appt.service_id) {
       sIds = [appt.service_id]
     }
@@ -375,7 +381,7 @@ export default function Agenda() {
     if (!editingAppointmentId) return
     setSubmitLoading(true)
     try {
-      await appointmentsApi.cancel(editingAppointmentId, "Cancelado via painel de agendamento")
+      await appointmentsApi.cancel(editingAppointmentId)
 
       setSuccessMsg("Agendamento cancelado com sucesso!")
       setTimeout(() => setSuccessMsg(""), 5000)

@@ -251,7 +251,7 @@ export default function TopClientsChart({ data = [] }) {
                   <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block">
                     Faturamento Top 20
                   </span>
-                  <span className="text-base font-black font-mono text-white">
+                  <span className="text-base font-black font-mono text-foreground">
                     {formatCurrency(totalTop20Revenue)}
                   </span>
                 </div>

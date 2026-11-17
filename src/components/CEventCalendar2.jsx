@@ -252,8 +252,9 @@ export default function CEventCalendar2({
     const slotMinutes = timeToMinutes(slotTime)
 
     const matches = dayAppointments.filter((appt) => {
-      // Ignorar cancelamentos comuns sem motivo de bloqueio
-      if (appt.status === "cancelled" && !appt.cancellation_reason) return false
+      // Ignorar cancelamentos comuns de clientes, considerando apenas bloqueios reais de agenda
+      const isBloqueio = appt.client_id === "cust-bloqueio-sistema" || (appt.client_name && appt.client_name.toUpperCase() === "BLOQUEIO DE AGENDA")
+      if (appt.status === "cancelled" && (!appt.cancellation_reason || !isBloqueio)) return false
 
       // Encontrar objeto do barbeiro correspondente às colunas
       const barbObj = barbers.find(
@@ -536,7 +537,7 @@ export default function CEventCalendar2({
 
                       const matchedCaixa = caixaTransactions.find(c => 
                         c.id === 'cx-srv-' + appt.id || 
-                        (c.appointment_id === appt.id && !c.id?.startsWith('caixa-sale-') && (c.id?.startsWith('cx-srv-') || c.category === 'Serviço'))
+                        (c.appointment_id === appt.id && !c.id?.startsWith('caixa-sale-') && (c.id?.startsWith('cx-srv-') || c.category === 'Serviço' || c.category === 'Serviços'))
                       )
                       const hasCaixa = Boolean(appt.caixa_id || matchedCaixa)
                       const currentPaymentMethod = appt.caixa_payment_method || (matchedCaixa ? matchedCaixa.payment_method : null)

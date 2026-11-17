@@ -1216,7 +1216,7 @@ export default function Dashboard() {
                 <TrendingUp size={18} />
               </div>
             </div>
-            <div className="font-display font-black text-[32px] text-white">
+            <div className="font-display font-black text-[32px] text-foreground">
               {formatCurrency(kpiData.totalReceitas)}
             </div>
             <p className="text-[10px] text-muted-foreground mt-1 flex items-center gap-1">
@@ -1254,7 +1254,7 @@ export default function Dashboard() {
                 <DollarSign size={18} />
               </div>
             </div>
-            <div className="font-display font-black text-[32px] text-white font-mono">
+            <div className="font-display font-black text-[32px] text-foreground font-mono">
               {formatCurrency(kpiData.ticketMedio)}
             </div>
             <p className="text-[10px] text-muted-foreground mt-1">
@@ -1272,7 +1272,7 @@ export default function Dashboard() {
                 <ShoppingBag size={18} />
               </div>
             </div>
-            <div className="font-display font-black text-[32px] text-white font-mono">
+            <div className="font-display font-black text-[32px] text-foreground font-mono">
               {formatCurrency(kpiData.ticketMedioProdutos)}
             </div>
             <p className="text-[10px] text-muted-foreground mt-1">
@@ -1291,7 +1291,7 @@ export default function Dashboard() {
               </div>
             </div>
             <div className="flex items-baseline justify-between">
-              <div className="font-display font-black text-[32px] text-white">
+              <div className="font-display font-black text-[32px] text-foreground">
                 {kpiData.concluidos} <span className="text-xs text-muted-foreground font-normal">atend.</span>
               </div>
               <span className="text-xs font-bold text-green-400 bg-green-500/10 px-2 py-0.5 rounded-md border border-green-500/20">

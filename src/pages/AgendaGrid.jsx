@@ -142,11 +142,12 @@ export default function AgendaGrid() {
       ? slotTime
       : (availableStartSlots.length > 0 ? availableStartSlots[0] : slotTime)
 
-    setCancelStartTime(initialStart)
+    const safeStart = initialStart || "08:00"
+    setCancelStartTime(safeStart)
 
     // Calcular o próximo slot (30 min a mais) como término padrão
     const isStaff = user && (user.role === "admin" || user.role === "barber" || user.role === "secretario")
-    const [h, m] = initialStart.split(":").map(Number)
+    const [h, m] = String(safeStart).split(":").map(Number)
     let endMin = h * 60 + m + 30
     let maxClosingMin = isStaff ? 23 * 60 : 20 * 60
     if (selectedDate) {
@@ -186,9 +187,12 @@ export default function AgendaGrid() {
 
     try {
       const data = await appointmentsApi.cancelRange({
+        barberId: cancelBarberId,
         barber_id: cancelBarberId,
         date: selectedDate,
+        startTime: cancelStartTime,
         start_time: cancelStartTime,
+        endTime: cancelEndTime,
         end_time: cancelEndTime,
         reason: cancelReason.trim()
       })
@@ -294,7 +298,7 @@ export default function AgendaGrid() {
       return a
     }))
     setCaixaList(prev => prev.map(c => {
-      if (c.id === updatedInfo.caixa_id || (c.appointment_id === updatedInfo.appointmentId && !c.id?.startsWith('caixa-sale-') && (c.id?.startsWith('cx-srv-') || c.category === 'Serviço'))) {
+      if (c.id === updatedInfo.caixa_id || (c.appointment_id === updatedInfo.appointmentId && !c.id?.startsWith('caixa-sale-') && (c.id?.startsWith('cx-srv-') || c.category === 'Serviço' || c.category === 'Serviços'))) {
         return {
           ...c,
           amount: updatedInfo.amount,
@@ -451,8 +455,8 @@ export default function AgendaGrid() {
 
   // Cálculo acumulado de duração e preço para múltiplos serviços
   const selectedServicesDetails = services.filter((s) => selectedServices.includes(s.id))
-  const totalDurationMinutes = selectedServicesDetails.reduce((sum, s) => sum + (s.duration_minutes ?? 30), 0)
-  const totalPriceCalculated = selectedServicesDetails.reduce((sum, s) => sum + (s.price || 0), 0)
+  const totalDurationMinutes = selectedServicesDetails.reduce((sum, s) => sum + Number(s.duration_minutes ?? 30), 0)
+  const totalPriceCalculated = selectedServicesDetails.reduce((sum, s) => sum + Number(s.price || 0), 0)
 
   let calculatedEndTime = ""
   if (selectedTime && totalDurationMinutes >= 0 && selectedServicesDetails.length > 0) {
@@ -495,8 +499,9 @@ export default function AgendaGrid() {
     }
 
     return appointments.some((appt) => {
-      // Ignorar cancelamentos comuns de clientes, mas CONSIDERAR bloqueios de agenda (que possuem cancellation_reason)
-      if (appt.status === "cancelled" && !appt.cancellation_reason) return false
+      // Ignorar cancelamentos comuns de clientes, mas CONSIDERAR bloqueios de agenda
+      const isBloqueio = appt.client_id === "cust-bloqueio-sistema" || (appt.client_name && appt.client_name.toUpperCase() === "BLOQUEIO DE AGENDA")
+      if (appt.status === "cancelled" && (!appt.cancellation_reason || !isBloqueio)) return false
       if (editingAppointmentId && String(appt.id) === String(editingAppointmentId)) return false
       if (!appt.appointment_time || !appt.appointment_time.startsWith(dateString)) return false
 
@@ -567,6 +572,8 @@ export default function AgendaGrid() {
 
     const relatedSlots = appointments.filter(a => {
       if (!a.appointment_time || a.status !== "cancelled") return false
+      const isBloqueio = a.client_id === "cust-bloqueio-sistema" || (a.client_name && a.client_name.toUpperCase() === "BLOQUEIO DE AGENDA")
+      if (!isBloqueio) return false
       const aDate = a.appointment_time.split("T")[0]
       const aReason = a.cancellation_reason || "Bloqueio de Agenda"
       return aDate === datePart && String(a.barber_id) === String(barbId) && aReason === reason
@@ -616,9 +623,10 @@ export default function AgendaGrid() {
   }
 
   const handleSelectAppointment = (appt) => {
-    // Apenas registros com status 'cancelled' que possuam motivo de bloqueio abrem o modal de Bloqueio de Agenda.
-    // Qualquer agendamento ativo (confirmed, completed, etc.) abre a edição padrão do agendamento.
-    if (appt && appt.status === "cancelled" && (appt.cancellation_reason || appt.client_id === "cust-bloqueio-sistema" || appt.client_name === "Bloqueio de Agenda")) {
+    // Apenas registros de bloqueio com status 'cancelled' abrem o modal de Bloqueio de Agenda.
+    // Qualquer agendamento de cliente (confirmed, completed, etc.) abre a edição padrão do agendamento.
+    const isBloqueio = appt && (appt.client_id === "cust-bloqueio-sistema" || (appt.client_name && appt.client_name.toUpperCase() === "BLOQUEIO DE AGENDA"))
+    if (appt && appt.status === "cancelled" && isBloqueio) {
       setSelectedBloqueio(appt)
       setError("")
       setSuccessMsg("")
@@ -628,12 +636,18 @@ export default function AgendaGrid() {
 
     setEditingAppointmentId(appt.id)
     setClientName(appt.client_name || "")
-    setClientPhone(formatPhoneNumber(appt.client_phone || ""))
+    setClientPhone(formatPhoneNumber(appt.client_phone || appt.phone || ""))
     setSelectedBarber(appt.barber_id || "")
 
     let sIds = []
-    if (appt.service_ids) {
-      sIds = typeof appt.service_ids === "string" ? appt.service_ids.split(",").filter(Boolean) : [appt.service_ids]
+    if (Array.isArray(appt.service_ids_list) && appt.service_ids_list.length > 0) {
+      sIds = appt.service_ids_list
+    } else if (Array.isArray(appt.service_ids) && appt.service_ids.length > 0) {
+      sIds = appt.service_ids
+    } else if (typeof appt.service_ids === "string" && appt.service_ids.trim()) {
+      sIds = appt.service_ids.split(",").map(s => s.trim()).filter(Boolean)
+    } else if (Array.isArray(appt.multiple_services) && appt.multiple_services.length > 0) {
+      sIds = appt.multiple_services.map(s => s.id).filter(Boolean)
     } else if (appt.service_id) {
       sIds = [appt.service_id]
     }
@@ -691,6 +705,19 @@ export default function AgendaGrid() {
       const serviceIdsList = Array.isArray(selectedServices) ? selectedServices : [selectedServices].filter(Boolean)
 
       if (editingAppointmentId) {
+        const currentAppt = appointments.find(a => String(a.id) === String(editingAppointmentId))
+        if (currentAppt?.client_id && currentAppt.client_id !== "cust-bloqueio-sistema") {
+          const prevName = (currentAppt.client_name || "").trim().toUpperCase()
+          const nextName = clientName.trim().toUpperCase()
+          const prevPhone = (currentAppt.client_phone || currentAppt.phone || "").replace(/\D/g, "")
+          const nextPhone = clientPhone.replace(/\D/g, "")
+          if (prevName !== nextName || (nextPhone && prevPhone !== nextPhone)) {
+            await customersApi.update(currentAppt.client_id, {
+              name: clientName,
+              phone: clientPhone
+            })
+          }
+        }
         await appointmentsApi.rescheduleOnline({
           appointmentId: editingAppointmentId,
           newAppointmentTime: appointmentTime,
@@ -735,8 +762,12 @@ export default function AgendaGrid() {
       setIsAppointmentModalOpen(false)
       setEditingAppointmentId(null)
 
-      const appts = await appointmentsApi.getAll()
+      const [appts, updatedCaixa] = await Promise.all([
+        appointmentsApi.getAll(),
+        caixaApi.getAll()
+      ])
       setAppointments(appts || [])
+      setCaixaList(updatedCaixa || [])
     } catch (err) {
       setError(err.message)
     } finally {
@@ -779,6 +810,20 @@ export default function AgendaGrid() {
 
     try {
       await appointmentsApi.update(editingAppointmentId, { status: newStatus })
+      if (newStatus === "absent") {
+        setCaixaList((prev) =>
+          prev.filter(
+            (c) =>
+              c.id !== `cx-srv-${editingAppointmentId}` &&
+              !(
+                String(c.appointment_id) === String(editingAppointmentId) &&
+                !c.id?.startsWith("caixa-sale-") &&
+                c.category !== "Venda de Produtos" &&
+                c.category !== "Produto"
+              )
+          )
+        )
+      }
       setIsAppointmentModalOpen(false)
       setEditingAppointmentId(null)
     } catch (err) {

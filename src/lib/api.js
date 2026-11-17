@@ -7,20 +7,30 @@ export const servicesApi = {
   async getPublic() {
     const { data, error } = await supabase
       .from("services")
-      .select("*")
+      .select("*, barber_services(barber_id)")
       .eq("restricted_access", false)
       .order("name")
     if (error) throw new Error(error.message)
-    return data || []
+    return (data || []).map(s => ({
+      ...s,
+      price: Number(s.price) || 0,
+      duration_minutes: Number(s.duration_minutes ?? 30),
+      barber_ids: (s.barber_services || []).map(bs => bs.barber_id)
+    }))
   },
 
   async getAll() {
     const { data, error } = await supabase
       .from("services")
-      .select("*")
+      .select("*, barber_services(barber_id)")
       .order("name")
     if (error) throw new Error(error.message)
-    return data || []
+    return (data || []).map(s => ({
+      ...s,
+      price: Number(s.price) || 0,
+      duration_minutes: Number(s.duration_minutes ?? 30),
+      barber_ids: (s.barber_services || []).map(bs => bs.barber_id)
+    }))
   },
 
   async create(service) {
@@ -36,7 +46,24 @@ export const servicesApi = {
       .select()
       .single()
     if (error) throw new Error(error.message)
-    return data
+
+    let targetBarberIds = Array.isArray(service.barber_ids) ? service.barber_ids.filter(Boolean) : []
+    if (targetBarberIds.length === 0) {
+      const { data: allBarbers } = await supabase.from("barbers").select("id")
+      targetBarberIds = (allBarbers || []).map(b => b.id)
+    }
+    if (targetBarberIds.length > 0) {
+      await supabase
+        .from("barber_services")
+        .insert(targetBarberIds.map(bid => ({ barber_id: bid, service_id: data.id })))
+    }
+
+    return {
+      ...data,
+      price: Number(data.price) || 0,
+      duration_minutes: Number(data.duration_minutes ?? 30),
+      barber_ids: targetBarberIds
+    }
   },
 
   async update(id, service) {
@@ -113,11 +140,19 @@ export const barbersApi = {
       .single()
     if (error) throw new Error(error.message)
 
-    if (serviceIds && serviceIds.length > 0) {
-      const links = serviceIds.map(sid => ({ barber_id: data.id, service_id: sid }))
+    let linksToInsert = Array.isArray(serviceIds) ? serviceIds.filter(Boolean) : []
+    if (linksToInsert.length === 0) {
+      const { data: allServices } = await supabase.from("services").select("id")
+      linksToInsert = (allServices || []).map(s => s.id)
+    }
+    if (linksToInsert.length > 0) {
+      const links = linksToInsert.map(sid => ({ barber_id: data.id, service_id: sid }))
       await supabase.from("barber_services").insert(links)
     }
-    return data
+    return {
+      ...data,
+      services: linksToInsert
+    }
   },
 
   async update(id, barber, serviceIds = null) {
@@ -351,21 +386,32 @@ export const appointmentsApi = {
     return (data || []).map(a => {
       const multipleServices = (a.appointment_services || []).map(as => as.services).filter(Boolean)
       const hasMultiple = multipleServices.length > 0
+      const serviceIdsList = hasMultiple
+        ? multipleServices.map(s => s.id).filter(Boolean)
+        : (a.service_id ? [a.service_id] : [])
+      const totalPrice = hasMultiple
+        ? multipleServices.reduce((sum, s) => sum + Number(s.price || 0), 0)
+        : (Number(a.services?.price) || 0)
+      const totalDuration = hasMultiple
+        ? multipleServices.reduce((sum, s) => sum + Number(s.duration_minutes || 30), 0)
+        : (Number(a.services?.duration_minutes) || 30)
+      const clientPhone = a.customers?.phone || ""
+
       return {
         ...a,
         client_name: a.customers?.name || "Cliente",
-        phone: a.customers?.phone || "",
+        phone: clientPhone,
+        client_phone: clientPhone,
         client_photo: a.customers?.photo || null,
         barber_name: a.barbers?.name || "Profissional",
+        service_ids: serviceIdsList.join(","),
+        service_ids_list: serviceIdsList,
         service_name: hasMultiple
           ? multipleServices.map(s => s.name).join(" + ")
           : (a.services?.name || "Procedimento"),
-        price: hasMultiple
-          ? multipleServices.reduce((sum, s) => sum + Number(s.price || 0), 0)
-          : (a.services?.price || 0),
-        duration_minutes: hasMultiple
-          ? multipleServices.reduce((sum, s) => sum + Number(s.duration_minutes || 30), 0)
-          : (a.services?.duration_minutes || 30),
+        price: totalPrice,
+        service_price: totalPrice,
+        duration_minutes: totalDuration,
         multiple_services: multipleServices
       }
     })
@@ -440,6 +486,24 @@ export const appointmentsApi = {
     return data
   },
 
+  async deleteServiceCaixa(appointmentId) {
+    if (!appointmentId) return
+    try {
+      await supabase
+        .from("caixa")
+        .delete()
+        .eq("appointment_id", appointmentId)
+        .not("category", "in", '("Venda de Produtos","Produto")')
+        .not("id", "like", "caixa-sale-%")
+      await supabase
+        .from("caixa")
+        .delete()
+        .eq("id", `cx-srv-${appointmentId}`)
+    } catch (err) {
+      console.warn("Aviso ao limpar lançamento de serviço no caixa:", err)
+    }
+  },
+
   async update(id, fields) {
     const validKeys = ['barber_id', 'service_id', 'client_id', 'appointment_time', 'status', 'cancellation_reason']
     const cleanFields = {}
@@ -456,27 +520,45 @@ export const appointmentsApi = {
       .select()
       .single()
     if (error) throw new Error(error.message)
+
+    if (cleanFields.status === "cancelled" || cleanFields.status === "absent") {
+      await this.deleteServiceCaixa(id)
+    }
+
     return data
   },
 
-  async cancel(id, reason = "Cancelado pelo usuário") {
+  async cancel(id, reason = null) {
     const { data, error } = await supabase
       .from("appointments")
       .update({
         status: "cancelled",
-        cancellation_reason: reason
+        cancellation_reason: reason || null
       })
       .eq("id", id)
       .select()
       .single()
     if (error) throw new Error(error.message)
+
+    await this.deleteServiceCaixa(id)
+
     return data
   },
 
-  async cancelRange({ barberId, date, startTime, endTime, reason }) {
+  async cancelRange(params = {}) {
+    const barberId = params.barberId || params.barber_id
+    const date = params.date
+    const startTime = params.startTime || params.start_time
+    const endTime = params.endTime || params.end_time
+    const reason = params.reason
+
+    if (!barberId || !date || !startTime || !endTime) {
+      throw new Error("Parâmetros obrigatórios ausentes para o bloqueio de horário.")
+    }
+
     const cancelReason = (reason && reason.trim()) ? reason.trim().toUpperCase() : "BLOQUEIO DE AGENDA"
-    const [startH, startM] = startTime.split(":").map(Number)
-    const [endH, endM] = endTime.split(":").map(Number)
+    const [startH, startM] = String(startTime).split(":").map(Number)
+    const [endH, endM] = String(endTime).split(":").map(Number)
     const startTotalMin = startH * 60 + startM
     const endTotalMin = endH * 60 + endM
 
@@ -509,7 +591,7 @@ export const appointmentsApi = {
         if (existingAtSlot.status === "confirmed" || existingAtSlot.status === "completed") {
           continue
         }
-        if (existingAtSlot.status === "cancelled") {
+        if (existingAtSlot.status === "cancelled" && existingAtSlot.client_id === "cust-bloqueio-sistema") {
           await supabase.from("appointments").update({ cancellation_reason: cancelReason }).eq("id", existingAtSlot.id)
           createdCount++
           continue
@@ -551,6 +633,7 @@ export const appointmentsApi = {
   },
 
   async delete(id) {
+    await this.deleteServiceCaixa(id)
     const { error } = await supabase.from("appointments").delete().eq("id", id)
     if (error) throw new Error(error.message)
     return true
@@ -769,13 +852,32 @@ export const caixaApi = {
   async sync() {
     const [appointments, existingCaixaRes] = await Promise.all([
       appointmentsApi.getAll(),
-      supabase.from("caixa").select("appointment_id, category")
+      supabase.from("caixa").select("id, appointment_id, category")
     ])
     if (existingCaixaRes.error) throw new Error(existingCaixaRes.error.message)
 
+    const cancelledOrAbsentIds = new Set(
+      (appointments || [])
+        .filter(a => a.status === "cancelled" || a.status === "absent")
+        .map(a => a.id)
+    )
+
+    const staleCaixaIds = (existingCaixaRes.data || [])
+      .filter(c => {
+        const isProduct = c.category === "Venda de Produtos" || c.category === "Produto" || c.id?.startsWith("caixa-sale-")
+        if (isProduct) return false
+        const linkedId = c.appointment_id || (c.id?.startsWith("cx-srv-") ? c.id.replace("cx-srv-", "") : null)
+        return linkedId && cancelledOrAbsentIds.has(linkedId)
+      })
+      .map(c => c.id)
+
+    if (staleCaixaIds.length > 0) {
+      await supabase.from("caixa").delete().in("id", staleCaixaIds)
+    }
+
     const syncedAppointmentIds = new Set(
       (existingCaixaRes.data || [])
-        .filter(c => c.appointment_id && c.category !== "Venda de Produtos")
+        .filter(c => !staleCaixaIds.includes(c.id) && c.appointment_id && c.category !== "Venda de Produtos" && c.category !== "Produto" && !c.id?.startsWith("caixa-sale-"))
         .map(c => c.appointment_id)
     )
 

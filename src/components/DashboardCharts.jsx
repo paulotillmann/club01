@@ -107,7 +107,7 @@ const BarberTooltip = ({ active, payload, label }) => {
                 <span className="w-2 h-2 rounded-full bg-white shrink-0"></span>
                 Serviços ({data.serviceCommissionPct || 0}% comissão):
               </span>
-              <span className="font-bold text-white font-mono">
+              <span className="font-bold text-foreground font-mono">
                 {formatCurrency(data.atendimentoValor || 0)}
               </span>
             </div>
