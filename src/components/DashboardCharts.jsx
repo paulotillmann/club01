@@ -86,10 +86,15 @@ const FinancialTooltip = ({ active, payload, label }) => {
 
 // Tooltip customizado para o gráfico de barbeiros
 const BarberTooltip = ({ active, payload, label }) => {
+  const { isDark } = useTheme()
+
   if (active && payload && payload.length) {
     const data = payload[0]?.payload || {}
+    const servicesDotColor = isDark ? "#FFFFFF" : "#18181B"
+    const productsDotColor = isDark ? "#9CA3AF" : "#52525B"
+
     return (
-      <div className="bg-[#18181b]/95 backdrop-blur-md border border-border/80 rounded-xl p-3.5 shadow-2xl text-xs space-y-2.5 min-w-[260px] z-50">
+      <div className="bg-card/95 backdrop-blur-md border border-border/80 rounded-xl p-3.5 shadow-2xl text-xs space-y-2.5 min-w-[260px] z-50">
         <div className="flex items-center justify-between border-b border-border/40 pb-2">
           <p className="font-bold text-foreground font-mono text-sm">{label}</p>
           <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Desempenho</span>
@@ -104,7 +109,10 @@ const BarberTooltip = ({ active, payload, label }) => {
           <div className="space-y-0.5">
             <div className="flex items-center justify-between text-muted-foreground text-[11px]">
               <span className="flex items-center gap-1.5 font-medium text-foreground">
-                <span className="w-2 h-2 rounded-full bg-white shrink-0"></span>
+                <span
+                  className="w-2 h-2 rounded-full shrink-0 border border-border/40"
+                  style={{ backgroundColor: servicesDotColor }}
+                />
                 Serviços ({data.serviceCommissionPct || 0}% comissão):
               </span>
               <span className="font-bold text-foreground font-mono">
@@ -120,10 +128,13 @@ const BarberTooltip = ({ active, payload, label }) => {
           <div className="space-y-0.5">
             <div className="flex items-center justify-between text-muted-foreground text-[11px]">
               <span className="flex items-center gap-1.5 font-medium text-foreground">
-                <span className="w-2 h-2 rounded-full bg-[#9CA3AF] shrink-0"></span>
+                <span
+                  className="w-2 h-2 rounded-full shrink-0 border border-border/40"
+                  style={{ backgroundColor: productsDotColor }}
+                />
                 Produtos ({data.productCommissionPct || 0}% comissão):
               </span>
-              <span className="font-bold text-[#9CA3AF] font-mono">
+              <span className="font-bold text-foreground font-mono">
                 {formatCurrency(data.produtosValor || 0)}
               </span>
             </div>
@@ -134,9 +145,9 @@ const BarberTooltip = ({ active, payload, label }) => {
           </div>
         </div>
 
-        <div className="flex items-center justify-between font-bold border-t border-border/40 pt-2 text-[#4ADE80]">
+        <div className="flex items-center justify-between font-bold border-t border-border/40 pt-2 text-emerald-600 dark:text-emerald-400">
           <span className="flex items-center gap-1.5 text-xs">
-            <span className="w-2.5 h-2.5 rounded-full bg-[#4ADE80] shrink-0"></span>
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-600 dark:bg-emerald-400 shrink-0" />
             Comissão Total a Receber:
           </span>
           <span className="font-mono font-black text-sm">{formatCurrency(data.comissaoTotal || 0)}</span>
@@ -152,7 +163,7 @@ const PieTooltip = ({ active, payload }) => {
   if (active && payload && payload.length) {
     const data = payload[0]
     return (
-      <div className="bg-[#18181b]/95 backdrop-blur-md border border-border/80 rounded-xl p-3 shadow-xl text-xs space-y-1">
+      <div className="bg-card/95 backdrop-blur-md border border-border/80 rounded-xl p-3 shadow-xl text-xs space-y-1 z-50">
         <p className="font-bold text-foreground flex items-center gap-1.5">
           <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: data.color || data.payload.color }}></span>
           {data.name}
@@ -300,6 +311,8 @@ const DailyTicketTooltip = ({ active, payload, label }) => {
 }
 
 export function DailyTicketTrendChart({ data = [] }) {
+  const { isDark } = useTheme()
+
   if (!data || data.length === 0) {
     return (
       <div className="h-80 flex items-center justify-center text-xs text-muted-foreground border border-dashed border-border/60 rounded-2xl bg-muted/10">
@@ -308,11 +321,15 @@ export function DailyTicketTrendChart({ data = [] }) {
     )
   }
 
+  const servicosLineColor = isDark ? "#FFFFFF" : "#18181B"
+  const servicosDotStroke = isDark ? "#18181b" : "#FFFFFF"
+  const gridStrokeColor = isDark ? "#27272a" : "#e4e4e7"
+
   return (
     <div className="h-80 w-full">
       <ResponsiveContainer width="100%" height="100%">
         <LineChart data={data} margin={{ top: 35, right: 15, left: -15, bottom: 0 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#27272a" vertical={false} />
+          <CartesianGrid strokeDasharray="3 3" stroke={gridStrokeColor} vertical={false} />
           <XAxis dataKey="date" stroke="#71717a" fontSize="10pt" tickLine={false} axisLine={false} />
           <YAxis stroke="#71717a" fontSize="10pt" tickLine={false} axisLine={false} tickFormatter={(val) => `R$${val}`} />
           <Tooltip content={<DailyTicketTooltip />} />
@@ -325,16 +342,16 @@ export function DailyTicketTrendChart({ data = [] }) {
             type="monotone"
             dataKey="ticketServicos"
             name="Ticket Serviços"
-            stroke="#FFFFFF"
+            stroke={servicosLineColor}
             strokeWidth={3}
-            dot={{ r: 4, fill: "#FFFFFF", stroke: "#18181b", strokeWidth: 2 }}
-            activeDot={{ r: 6, stroke: "#ffffff", strokeWidth: 2 }}
+            dot={{ r: 4, fill: servicosLineColor, stroke: servicosDotStroke, strokeWidth: 2 }}
+            activeDot={{ r: 6, stroke: servicosLineColor, strokeWidth: 2 }}
           >
             <LabelList
               dataKey="ticketServicos"
               position="top"
               formatter={(val) => Number(val) > 0 ? `R$${Math.round(val)}` : ""}
-              style={{ fill: "#FFFFFF", fontSize: "9pt", fontWeight: "800", fontFamily: "monospace" }}
+              style={{ fill: servicosLineColor, fontSize: "9pt", fontWeight: "800", fontFamily: "monospace" }}
             />
           </Line>
           <Line
@@ -343,7 +360,7 @@ export function DailyTicketTrendChart({ data = [] }) {
             name="Ticket Produtos"
             stroke="#9CA3AF"
             strokeWidth={3}
-            dot={{ r: 4, fill: "#9CA3AF", stroke: "#18181b", strokeWidth: 2 }}
+            dot={{ r: 4, fill: "#9CA3AF", stroke: servicosDotStroke, strokeWidth: 2 }}
             activeDot={{ r: 6, stroke: "#FFFFFF", strokeWidth: 2 }}
           >
             <LabelList

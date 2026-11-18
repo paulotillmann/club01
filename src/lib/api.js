@@ -94,6 +94,16 @@ export const servicesApi = {
 // 2. PROFISSIONAIS / BARBEIROS
 // ==============================================================================
 export const barbersApi = {
+  async getPublic() {
+    const { data, error } = await supabase
+      .from("barbers")
+      .select("id, name, photo, specialty, is_active")
+      .or("is_active.eq.true,is_active.is.null")
+      .order("name")
+    if (error) throw new Error(error.message)
+    return data || []
+  },
+
   async getAll() {
     const { data, error } = await supabase
       .from("barbers")
@@ -962,6 +972,9 @@ export const settingsApi = {
   },
 
   async update(key, value) {
+    if (typeof key === "object" && key !== null && value === undefined) {
+      return this.updateMany(key)
+    }
     const { data, error } = await supabase
       .from("settings")
       .upsert({ key, value: String(value) }, { onConflict: "key" })

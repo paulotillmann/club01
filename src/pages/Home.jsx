@@ -7,11 +7,13 @@ import {
   Calendar,
   Sparkles,
   Droplet,
-  Flame
+  Flame,
+  User,
+  MapPin
 } from "lucide-react"
 import Logo from "../components/Logo.jsx"
 import { useAuth } from "../context/AuthContext.jsx"
-import { servicesApi } from "../lib/api.js"
+import { servicesApi, barbersApi, settingsApi } from "../lib/api.js"
 
 const DEFAULT_SERVICES = [
   {
@@ -62,6 +64,9 @@ export default function Home() {
   const navigate = useNavigate()
   const { user, loading } = useAuth()
   const [servicesList, setServicesList] = useState(DEFAULT_SERVICES)
+  const [team, setTeam] = useState([])
+  const [loadingTeam, setLoadingTeam] = useState(true)
+  const [shopAddress, setShopAddress] = useState("")
 
   useEffect(() => {
     if (!loading && user) {
@@ -84,7 +89,34 @@ export default function Home() {
         console.error("Erro ao carregar serviços da API na Home:", err)
       }
     }
+
+    async function loadTeam() {
+      try {
+        const data = await barbersApi.getPublic()
+        if (Array.isArray(data)) {
+          setTeam(data.filter(b => b.is_active !== false))
+        }
+      } catch (err) {
+        console.error("Erro ao carregar equipe da API na Home:", err)
+      } finally {
+        setLoadingTeam(false)
+      }
+    }
+
+    async function loadSettings() {
+      try {
+        const data = await settingsApi.getAll()
+        if (data?.shop_address) {
+          setShopAddress(data.shop_address)
+        }
+      } catch (err) {
+        console.error("Erro ao carregar configurações na Home:", err)
+      }
+    }
+
     loadServices()
+    loadTeam()
+    loadSettings()
   }, [])
 
   if (user) {
@@ -103,24 +135,6 @@ export default function Home() {
     if (text.includes("sobrancelha")) return <Sparkles className="w-6 h-6" />
     return <Scissors className="w-6 h-6" />
   }
-
-  const team = [
-    {
-      name: "MÁRCIO",
-      role: "Barbeiro Especialista",
-      photo: "/assets/marcio-barber.jpeg"
-    },
-    {
-      name: "LUCAS",
-      role: "Barbeiro Especialista",
-      photo: "/assets/lucas-barber.jpeg"
-    },
-    {
-      name: "PAULO NETO",
-      role: "Barbeiro Especialista",
-      photo: "/assets/neto-barber.jpeg"
-    }
-  ]
 
   const handleScroll = (id) => {
     const element = document.getElementById(id)
@@ -290,34 +304,56 @@ export default function Home() {
             <h2 className="font-display text-3xl sm:text-5xl md:text-6xl font-bold uppercase tracking-tight mb-4 text-foreground">
               Nossa Equipe
             </h2>
-            <p className="text-muted-foreground text-sm sm:text-base font-medium max-w-xl mx-auto">
-              Especialistas em cortes clássicos, fade, barba e estética masculina moderna.
-            </p>
           </div>
 
           <div className="flex flex-wrap justify-center gap-8 max-w-5xl mx-auto">
-            {team.map((barber, i) => (
-              <div
-                key={i}
-                className="w-full sm:w-[260px] club-card overflow-hidden text-center group"
-              >
-                <div className="relative aspect-[3/4] overflow-hidden bg-muted">
-                  <img
-                    src={barber.photo}
-                    alt={barber.name}
-                    className="w-full h-full object-cover object-top transition-transform duration-500 group-hover:scale-105"
-                  />
+            {loadingTeam ? (
+              Array.from({ length: 3 }).map((_, i) => (
+                <div
+                  key={i}
+                  className="w-full sm:w-[260px] club-card overflow-hidden animate-pulse"
+                >
+                  <div className="aspect-[3/4] bg-muted" />
+                  <div className="p-4 bg-card space-y-2">
+                    <div className="h-5 w-32 bg-muted rounded mx-auto" />
+                    <div className="h-3 w-24 bg-muted rounded mx-auto" />
+                  </div>
                 </div>
-                <div className="p-4 bg-card">
-                  <h3 className="font-display text-xl font-bold uppercase tracking-wide text-foreground">
-                    {barber.name}
-                  </h3>
-                  <p className="text-xs text-muted-foreground font-medium mt-0.5">
-                    {barber.role}
-                  </p>
+              ))
+            ) : team.length === 0 ? (
+              <p className="text-sm text-muted-foreground font-medium py-8 text-center">
+                Nenhum profissional disponível no momento.
+              </p>
+            ) : (
+              team.map((barber) => (
+                <div
+                  key={barber.id}
+                  className="w-full sm:w-[260px] club-card overflow-hidden text-center group"
+                >
+                  <div className="relative aspect-[3/4] overflow-hidden bg-muted flex items-center justify-center">
+                    {barber.photo ? (
+                      <img
+                        src={barber.photo}
+                        alt={barber.name}
+                        className="w-full h-full object-cover object-top transition-transform duration-500 group-hover:scale-105"
+                      />
+                    ) : (
+                      <div className="flex flex-col items-center justify-center gap-2 text-muted-foreground/50">
+                        <User className="w-16 h-16 stroke-[1.5]" />
+                      </div>
+                    )}
+                  </div>
+                  <div className="p-4 bg-card">
+                    <h3 className="font-display text-xl font-bold uppercase tracking-wide text-foreground">
+                      {barber.name}
+                    </h3>
+                    <p className="text-xs text-muted-foreground font-medium mt-0.5">
+                      {barber.specialty || "Barbeiro Especialista"}
+                    </p>
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </div>
       </section>
@@ -363,7 +399,15 @@ export default function Home() {
 
           <div className="flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-muted-foreground font-medium">
             <p>© {new Date().getFullYear()} CLUB 01 Barber Studio. Todos os direitos reservados.</p>
-            <p>Atendimento: Seg - Sex: 09:00 às 20:00 • Sáb: 08:00 às 19:00</p>
+            <div className="flex flex-col items-center md:items-end gap-1 text-center md:text-right">
+              {shopAddress && (
+                <p className="inline-flex items-center gap-1.5 text-foreground/80">
+                  <MapPin className="w-3.5 h-3.5 shrink-0" />
+                  <span>{shopAddress}</span>
+                </p>
+              )}
+              <p>Atendimento: Seg - Sex: 09:00 às 20:00 • Sáb: 08:00 às 19:00</p>
+            </div>
           </div>
         </div>
       </footer>

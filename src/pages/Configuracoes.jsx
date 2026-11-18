@@ -291,7 +291,7 @@ export default function Configuracoes() {
     window.dispatchEvent(new Event("storage_settings_updated"))
 
     try {
-      await settingsApi.update({
+      await settingsApi.updateMany({
         shop_name: shopName,
         shop_address: shopAddress,
         shop_phone: shopPhone,
