@@ -36,7 +36,7 @@ export default function Configuracoes() {
   // WhatsApp Logs & Config states
   const [whatsappLogs, setWhatsappLogs] = useState([])
   const [whatsappConfig, setWhatsappConfig] = useState({
-    instance_name: "Meu Bolso Digital",
+    instance_name: "Barbearia CLUB01",
     dry_run: true,
     enabled: false,
     reminder_lead_minutes: 30,

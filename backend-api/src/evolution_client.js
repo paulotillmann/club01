@@ -90,7 +90,7 @@ export class EvolutionApiClient {
   constructor(config = {}) {
     this.apiUrl = (config.apiUrl || (typeof process !== 'undefined' ? process.env?.EVOLUTION_API_URL : '') || 'http://localhost:8080').replace(/\/+$/, '');
     this.apiKey = config.apiKey || (typeof process !== 'undefined' ? process.env?.EVOLUTION_API_KEY : '') || '';
-    this.instanceName = config.instanceName || (typeof process !== 'undefined' ? process.env?.EVOLUTION_INSTANCE_NAME : '') || 'Meu Bolso Digital';
+    this.instanceName = config.instanceName || (typeof process !== 'undefined' ? process.env?.EVOLUTION_INSTANCE_NAME : '') || 'Barbearia CLUB01';
     this.testNumber = config.testNumber || (typeof process !== 'undefined' ? process.env?.WHATSAPP_TEST_NUMBER : '') || '';
     
     // Trava Estrita de Segurança Absoluta:

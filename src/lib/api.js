@@ -1172,7 +1172,7 @@ export const whatsappConfigApi = {
           if (counts[r.status] !== undefined) counts[r.status]++
         }
         return {
-          instance_name: "Meu Bolso Digital",
+          instance_name: "Barbearia CLUB01",
           dry_run: true,
           enabled: false,
           reminder_lead_minutes: 30,
@@ -1184,7 +1184,7 @@ export const whatsappConfigApi = {
     }
 
     return {
-      instance_name: "Meu Bolso Digital",
+      instance_name: "Barbearia CLUB01",
       dry_run: true,
       enabled: false,
       reminder_lead_minutes: 30,
