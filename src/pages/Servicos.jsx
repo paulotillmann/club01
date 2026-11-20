@@ -84,7 +84,7 @@ export default function Servicos() {
     setEditingServiceId(srv.id)
     setServiceName(srv.name || "")
     setServiceDescription(srv.description || "")
-    setServiceDurationMinutes(srv.duration_minutes ?? 30)
+    setServiceDurationMinutes(srv.duration_minutes !== null && srv.duration_minutes !== undefined ? Number(srv.duration_minutes) : 30)
 
     const cents = Math.round((srv.price || 0) * 100)
     const formattedPrice = (cents / 100).toLocaleString("pt-BR", {
@@ -153,7 +153,7 @@ export default function Servicos() {
         id: savedService.id,
         name: savedService.name,
         description: savedService.description,
-        duration_minutes: savedService.duration_minutes,
+        duration_minutes: savedService.duration_minutes !== null && savedService.duration_minutes !== undefined ? Number(savedService.duration_minutes) : Number(serviceDurationMinutes),
         price: savedService.price,
         restricted_access: savedService.restricted_access,
         acesso_restrito: savedService.restricted_access,

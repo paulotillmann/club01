@@ -693,7 +693,7 @@ export default function Agendar() {
                               <div>
                                 <p className="font-semibold text-sm sm:text-base">{srv.name}</p>
                                 <p className="text-xs text-muted-foreground">
-                                  {srv.description || "Procedimento exclusivo CLUB 01 de alto padrão"} • {srv.duration_minutes || 30} min
+                                  {srv.description || "Procedimento exclusivo CLUB 01 de alto padrão"} • {srv.duration_minutes === 0 ? "Livre" : `${srv.duration_minutes ?? 30} min`}
                                 </p>
                               </div>
                             </div>

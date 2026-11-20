@@ -4,6 +4,7 @@ import { useAuth } from "../context/AuthContext.jsx"
 import { settingsApi, usersApi, whatsappLogsApi, whatsappConfigApi } from "../lib/api.js"
 import { Settings, ShieldAlert, AlertTriangle, CheckCircle2, Pencil, Trash2, MessageSquare, Clock, ShieldCheck, Smartphone } from "lucide-react"
 import Sidebar from "../components/Sidebar.jsx"
+import WhatsappAiAgentSection from "../components/WhatsappAiAgentSection.jsx"
 
 export default function Configuracoes() {
   const { user } = useAuth()
@@ -542,6 +543,9 @@ export default function Configuracoes() {
               </div>
 
             </div>
+
+            {/* Seção: Agente de IA WhatsApp (Atendimento Automático com Gemini) */}
+            <WhatsappAiAgentSection />
 
             {/* Seção: Automação WhatsApp & Evolution API (Fase 6) */}
             <div className="mt-8 pt-8 border-t border-border/60 space-y-6">

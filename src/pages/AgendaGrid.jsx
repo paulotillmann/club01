@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react"
+import React, { useState, useEffect, useRef, useMemo } from "react"
 import { useNavigate } from "react-router-dom"
 import { useAuth } from "../context/AuthContext.jsx"
 import {
@@ -27,13 +27,130 @@ import {
   ChevronRight,
   Edit3,
   Check,
-  UserX
+  UserX,
+  Repeat
 } from "lucide-react"
 import Sidebar from "../components/Sidebar.jsx"
 import CEventCalendar2 from "../components/CEventCalendar2.jsx"
 import CCalendar24 from "../components/CCalendar24.jsx"
 import SaleModal from "../components/SaleModal.jsx"
 import CaixaEntryModal from "../components/CaixaEntryModal.jsx"
+
+const WEEKDAY_OPTIONS = [
+  { value: 1, label: "Seg" },
+  { value: 2, label: "Ter" },
+  { value: 3, label: "Qua" },
+  { value: 4, label: "Qui" },
+  { value: 5, label: "Sex" },
+  { value: 6, label: "Sáb" }
+]
+
+const FREQUENCY_OPTIONS = [
+  { value: "weekly", label: "Semanal" },
+  { value: "biweekly", label: "Quinzenal" },
+  { value: "monthly", label: "Mensal" }
+]
+
+const MAX_RECURRENCE_OCCURRENCES = 60
+
+const parseYMD = (ymd) => {
+  if (!ymd) return null
+  const parts = String(ymd).split("-").map(Number)
+  if (parts.length !== 3 || parts.some(isNaN)) return null
+  return new Date(parts[0], parts[1] - 1, parts[2])
+}
+
+const formatYMD = (dateObj) => {
+  const yyyy = dateObj.getFullYear()
+  const mm = String(dateObj.getMonth() + 1).padStart(2, "0")
+  const dd = String(dateObj.getDate()).padStart(2, "0")
+  return `${yyyy}-${mm}-${dd}`
+}
+
+const addDaysYMD = (ymd, days) => {
+  const d = parseYMD(ymd)
+  if (!d) return ymd
+  d.setDate(d.getDate() + days)
+  return formatYMD(d)
+}
+
+const generateRecurrenceDates = (startDateStr, endDateStr, frequency, weekdays) => {
+  const start = parseYMD(startDateStr)
+  const end = parseYMD(endDateStr)
+  if (!start || !end || end < start || !Array.isArray(weekdays) || weekdays.length === 0) {
+    return { dates: [], truncated: false }
+  }
+
+  const validWeekdays = [...new Set(weekdays.map(Number).filter((w) => w >= 1 && w <= 6))].sort((a, b) => a - b)
+  if (validWeekdays.length === 0) {
+    return { dates: [], truncated: false }
+  }
+
+  const results = []
+  let truncated = false
+
+  if (frequency === "weekly" || frequency === "biweekly") {
+    const startSunday = new Date(start.getFullYear(), start.getMonth(), start.getDate() - start.getDay())
+    const cursor = new Date(start.getFullYear(), start.getMonth(), start.getDate())
+
+    while (cursor <= end) {
+      const curSunday = new Date(cursor.getFullYear(), cursor.getMonth(), cursor.getDate() - cursor.getDay())
+      const weeksDiff = Math.round((curSunday.getTime() - startSunday.getTime()) / (7 * 86400000))
+      const matchesWeek = frequency === "weekly" || weeksDiff % 2 === 0
+
+      if (matchesWeek && validWeekdays.includes(cursor.getDay())) {
+        if (results.length >= MAX_RECURRENCE_OCCURRENCES) {
+          truncated = true
+          break
+        }
+        results.push(formatYMD(cursor))
+      }
+      cursor.setDate(cursor.getDate() + 1)
+    }
+  } else if (frequency === "monthly") {
+    const targetOccurrence = Math.ceil(start.getDate() / 7)
+    let year = start.getFullYear()
+    let month = start.getMonth()
+    const endYear = end.getFullYear()
+    const endMonth = end.getMonth()
+
+    while (year < endYear || (year === endYear && month <= endMonth)) {
+      const monthCandidates = []
+      validWeekdays.forEach((dow) => {
+        const firstOfMonth = new Date(year, month, 1)
+        const firstDowOffset = (dow - firstOfMonth.getDay() + 7) % 7
+        const firstMatchDay = 1 + firstDowOffset
+        let targetDay = firstMatchDay + (targetOccurrence - 1) * 7
+        const daysInMonth = new Date(year, month + 1, 0).getDate()
+        while (targetDay > daysInMonth) {
+          targetDay -= 7
+        }
+        const candidate = new Date(year, month, targetDay)
+        if (candidate >= start && candidate <= end) {
+          monthCandidates.push(candidate)
+        }
+      })
+
+      monthCandidates.sort((a, b) => a.getTime() - b.getTime())
+      for (const c of monthCandidates) {
+        if (results.length >= MAX_RECURRENCE_OCCURRENCES) {
+          truncated = true
+          break
+        }
+        results.push(formatYMD(c))
+      }
+      if (truncated) break
+
+      month += 1
+      if (month > 11) {
+        month = 0
+        year += 1
+      }
+    }
+  }
+
+  return { dates: results, truncated }
+}
 
 export default function AgendaGrid() {
   const { user } = useAuth()
@@ -217,6 +334,13 @@ export default function AgendaGrid() {
   const [selectedBarber, setSelectedBarber] = useState("")
   const [selectedServices, setSelectedServices] = useState([])
   const [selectedTime, setSelectedTime] = useState("")
+
+  // Recorrência de agendamento
+  const [isRecurring, setIsRecurring] = useState(false)
+  const [recurrenceFrequency, setRecurrenceFrequency] = useState("weekly")
+  const [recurrenceWeekdays, setRecurrenceWeekdays] = useState([1])
+  const [recurrenceEndDate, setRecurrenceEndDate] = useState("")
+  const [cancelScopePromptOpen, setCancelScopePromptOpen] = useState(false)
 
   // Autocomplete e Modal de Cliente
   const [isCustomerDropdownOpen, setIsCustomerDropdownOpen] = useState(false)
@@ -558,6 +682,13 @@ export default function AgendaGrid() {
     setClientName("")
     setClientPhone("")
     setSelectedServices([])
+    const baseDate = parseYMD(selectedDate)
+    const baseDow = baseDate ? baseDate.getDay() : new Date().getDay()
+    setIsRecurring(false)
+    setRecurrenceFrequency("weekly")
+    setRecurrenceWeekdays(baseDow >= 1 && baseDow <= 6 ? [baseDow] : [1])
+    setRecurrenceEndDate(addDaysYMD(selectedDate, 28))
+    setCancelScopePromptOpen(false)
     setError("")
     setSuccessMsg("")
     setIsAppointmentModalOpen(true)
@@ -665,7 +796,77 @@ export default function AgendaGrid() {
 
     setError("")
     setSuccessMsg("")
+    setIsRecurring(false)
+    setCancelScopePromptOpen(false)
     setIsAppointmentModalOpen(true)
+  }
+
+  // Prévia das datas do agendamento recorrente
+  const recurrencePreview = useMemo(() => {
+    if (!isRecurring || editingAppointmentId || !selectedDate || !selectedTime || !recurrenceEndDate) {
+      return { allDates: [], availableDates: [], skippedDates: [], truncated: false }
+    }
+
+    const { dates, truncated } = generateRecurrenceDates(
+      selectedDate,
+      recurrenceEndDate,
+      recurrenceFrequency,
+      recurrenceWeekdays
+    )
+
+    const allDates = dates.map((d) => {
+      const conflict = selectedBarber ? isTimeSlotBooked(d, selectedTime, selectedBarber) : false
+      const past = isTimeSlotPast(d, selectedTime)
+      return {
+        date: d,
+        hasConflict: conflict || past,
+        reason: past ? "Horário passado" : conflict ? "Horário ocupado" : null
+      }
+    })
+
+    return {
+      allDates,
+      availableDates: allDates.filter((item) => !item.hasConflict),
+      skippedDates: allDates.filter((item) => item.hasConflict),
+      truncated
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    isRecurring,
+    editingAppointmentId,
+    selectedDate,
+    selectedTime,
+    selectedBarber,
+    selectedServices,
+    recurrenceFrequency,
+    recurrenceWeekdays,
+    recurrenceEndDate,
+    appointments
+  ])
+
+  const handleToggleRecurrence = () => {
+    setIsRecurring((prev) => {
+      const next = !prev
+      if (next) {
+        const baseDate = parseYMD(selectedDate)
+        const baseDow = baseDate ? baseDate.getDay() : 1
+        if (recurrenceWeekdays.length === 0) {
+          setRecurrenceWeekdays(baseDow >= 1 && baseDow <= 6 ? [baseDow] : [1])
+        }
+        if (!recurrenceEndDate || recurrenceEndDate < selectedDate) {
+          setRecurrenceEndDate(addDaysYMD(selectedDate, 28))
+        }
+      }
+      return next
+    })
+  }
+
+  const handleToggleRecurrenceWeekday = (dayVal) => {
+    setRecurrenceWeekdays((prev) =>
+      prev.includes(dayVal)
+        ? prev.filter((d) => d !== dayVal)
+        : [...prev, dayVal].sort((a, b) => a - b)
+    )
   }
 
   // Submeter Agendamento
@@ -695,9 +896,32 @@ export default function AgendaGrid() {
       return
     }
 
-    if (isTimeSlotBooked(selectedDate, selectedTime)) {
+    if (!isRecurring && isTimeSlotBooked(selectedDate, selectedTime)) {
       setError("O horário selecionado já está agendado para este profissional.")
       return
+    }
+
+    if (!editingAppointmentId && isRecurring) {
+      if (recurrenceWeekdays.length === 0) {
+        setError("Selecione ao menos um dia da semana para o agendamento recorrente.")
+        return
+      }
+      if (!recurrenceEndDate) {
+        setError("Selecione a data final da recorrência.")
+        return
+      }
+      if (recurrenceEndDate < selectedDate) {
+        setError("A data final da recorrência deve ser igual ou posterior à data inicial.")
+        return
+      }
+      if (recurrencePreview.allDates.length === 0) {
+        setError("Nenhuma data encontrada para os critérios de recorrência selecionados.")
+        return
+      }
+      if (recurrencePreview.availableDates.length === 0) {
+        setError("Todas as datas geradas na recorrência estão ocupadas ou indisponíveis.")
+        return
+      }
     }
 
     setSubmitLoading(true)
@@ -705,6 +929,7 @@ export default function AgendaGrid() {
 
     try {
       const serviceIdsList = Array.isArray(selectedServices) ? selectedServices : [selectedServices].filter(Boolean)
+      let feedbackMessage = editingAppointmentId ? "Agendamento atualizado com sucesso!" : "Agendamento realizado com sucesso!"
 
       if (editingAppointmentId) {
         const currentAppt = appointments.find(a => String(a.id) === String(editingAppointmentId))
@@ -726,6 +951,22 @@ export default function AgendaGrid() {
           newBarberId: selectedBarber,
           serviceIds: serviceIdsList
         })
+      } else if (isRecurring) {
+        const appointmentTimes = recurrencePreview.availableDates.map(
+          (item) => `${item.date}T${selectedTime}`
+        )
+        const recResult = await appointmentsApi.bookRecurring({
+          name: clientName,
+          phone: clientPhone,
+          barberId: selectedBarber,
+          serviceIds: serviceIdsList,
+          appointmentTimes
+        })
+        const createdCount = recResult?.created_count || appointmentTimes.length
+        const skippedTotal = (recurrencePreview.skippedDates.length || 0) + (recResult?.skipped_count || 0)
+        feedbackMessage = skippedTotal > 0
+          ? `Recorrência criada: ${createdCount} agendamento(s) confirmado(s) e ${skippedTotal} pulado(s) por conflito.`
+          : `Recorrência criada com ${createdCount} agendamento(s) confirmado(s)!`
       } else {
         await appointmentsApi.bookOnline({
           name: clientName,
@@ -736,11 +977,12 @@ export default function AgendaGrid() {
         })
       }
 
-      setSuccessMsg(editingAppointmentId ? "Agendamento atualizado com sucesso!" : "Agendamento realizado com sucesso!")
-      setTimeout(() => setSuccessMsg(""), 4000)
+      setSuccessMsg(feedbackMessage)
+      setTimeout(() => setSuccessMsg(""), 6000)
 
       setIsAppointmentModalOpen(false)
       setEditingAppointmentId(null)
+      setIsRecurring(false)
 
       // Atualizar lista
       const appts = await appointmentsApi.getAll()
@@ -753,14 +995,32 @@ export default function AgendaGrid() {
   }
 
   // Cancelar Agendamento
-  const handleCancelAppointment = async () => {
+  const handleCancelAppointment = async (scope = null) => {
     if (!editingAppointmentId) return
+    const currentEditingAppt = appointments.find((a) => String(a.id) === String(editingAppointmentId))
+    if (currentEditingAppt?.recurrence_id && !scope) {
+      setCancelScopePromptOpen(true)
+      return
+    }
+
     setSubmitLoading(true)
     try {
-      await appointmentsApi.cancel(editingAppointmentId)
+      let cancelMsg = "Agendamento cancelado com sucesso!"
+      if (currentEditingAppt?.recurrence_id) {
+        const res = await appointmentsApi.cancelRecurring({
+          appointmentId: editingAppointmentId,
+          scope: scope || "single"
+        })
+        if (scope === "future" && res?.cancelled_count > 1) {
+          cancelMsg = `${res.cancelled_count} agendamentos da recorrência cancelados com sucesso!`
+        }
+      } else {
+        await appointmentsApi.cancel(editingAppointmentId)
+      }
 
-      setSuccessMsg("Agendamento cancelado com sucesso!")
+      setSuccessMsg(cancelMsg)
       setTimeout(() => setSuccessMsg(""), 4000)
+      setCancelScopePromptOpen(false)
       setIsAppointmentModalOpen(false)
       setEditingAppointmentId(null)
 
@@ -1225,11 +1485,19 @@ export default function AgendaGrid() {
       {isAppointmentModalOpen && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
           <div className="bg-card/95 text-card-foreground backdrop-blur-xl w-full max-w-3xl md:max-w-4xl border border-primary/30 rounded-2xl p-6 md:p-8 shadow-2xl relative animate-scale-in max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between gap-4 mb-5">
-              <h3 className="text-xl font-bold font-display text-primary flex items-center gap-2">
-                {editingAppointmentId ? <Edit3 size={20} /> : <Plus size={20} />}
-                {editingAppointmentId ? "Editar Agendamento" : "Novo Agendamento"}
-              </h3>
+            <div className="flex items-center justify-between gap-4 mb-5 flex-wrap">
+              <div className="flex items-center gap-2.5 flex-wrap">
+                <h3 className="text-xl font-bold font-display text-primary flex items-center gap-2">
+                  {editingAppointmentId ? <Edit3 size={20} /> : <Plus size={20} />}
+                  {editingAppointmentId ? "Editar Agendamento" : "Novo Agendamento"}
+                </h3>
+
+                {editingAppointmentId && appointments.find((a) => String(a.id) === String(editingAppointmentId))?.recurrence_id && (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-primary/15 border border-primary/30 text-primary text-[10px] font-bold uppercase tracking-wider">
+                    <Repeat size={11} /> Recorrente
+                  </span>
+                )}
+              </div>
 
               {selectedDate && (
                 <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-primary/10 border border-primary/30 text-primary shrink-0">
@@ -1473,9 +1741,160 @@ export default function AgendaGrid() {
                       R$ {totalPriceCalculated.toFixed(2).replace(".", ",")}
                     </div>
                     <div className="text-[10pt] text-muted-foreground font-mono font-bold">
-                      ⏱️ {totalDurationMinutes} min {selectedTime && calculatedEndTime ? `(${selectedTime} - ${calculatedEndTime})` : ""}
+                      ⏱️ {totalDurationMinutes === 0 ? "Livre" : `${totalDurationMinutes} min`} {selectedTime && calculatedEndTime ? `(${selectedTime} - ${calculatedEndTime})` : ""}
                     </div>
                   </div>
+                </div>
+              )}
+
+              {/* OPÇÃO DE AGENDAMENTO RECORRENTE (EXCLUSIVO NA CRIAÇÃO DE NOVO AGENDAMENTO) */}
+              {!editingAppointmentId && (
+                <div className="border border-border/70 bg-background/30 rounded-xl p-3.5 space-y-3">
+                  <div className="flex items-center justify-between gap-3 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={handleToggleRecurrence}
+                      className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl border text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
+                        isRecurring
+                          ? "bg-primary text-background border-primary shadow-sm"
+                          : "bg-background border-border text-foreground hover:border-primary/60"
+                      }`}
+                    >
+                      <Repeat size={14} />
+                      <span>Agendamento Recorrente</span>
+                      <span className={`px-1.5 py-0.5 rounded text-[9px] font-black ${
+                        isRecurring ? "bg-background/20 text-background" : "bg-muted text-muted-foreground"
+                      }`}>
+                        {isRecurring ? "ATIVO" : "ATIVAR"}
+                      </span>
+                    </button>
+
+                    <span className="text-[11px] text-muted-foreground">
+                      {isRecurring
+                        ? "Datas com conflito de horário serão puladas automaticamente."
+                        : "Clique para repetir este agendamento semanalmente, quinzenalmente ou mensalmente."}
+                    </span>
+                  </div>
+
+                  {isRecurring && (
+                    <div className="pt-3 border-t border-border/40 space-y-3 animate-fade-in">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {/* Frequência */}
+                        <div className="space-y-1.5">
+                          <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block">
+                            Frequência *
+                          </label>
+                          <div className="grid grid-cols-3 gap-2">
+                            {FREQUENCY_OPTIONS.map((opt) => {
+                              const active = recurrenceFrequency === opt.value
+                              return (
+                                <button
+                                  key={opt.value}
+                                  type="button"
+                                  onClick={() => setRecurrenceFrequency(opt.value)}
+                                  className={`py-2 px-2.5 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
+                                    active
+                                      ? "bg-primary/15 border-primary text-primary"
+                                      : "bg-background border-border/70 text-muted-foreground hover:border-border"
+                                  }`}
+                                >
+                                  {opt.label}
+                                </button>
+                              )
+                            })}
+                          </div>
+                        </div>
+
+                        {/* Data Final */}
+                        <div className="space-y-1.5">
+                          <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block">
+                            Repetir até o dia *
+                          </label>
+                          <input
+                            type="date"
+                            value={recurrenceEndDate}
+                            min={selectedDate || todayStr}
+                            onChange={(e) => setRecurrenceEndDate(e.target.value)}
+                            className="w-full bg-background border border-border focus:border-primary rounded-xl py-2 px-3 text-xs text-foreground font-mono focus:outline-none transition-all"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Dias da Semana */}
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block">
+                          Dia(s) da Semana *
+                        </label>
+                        <div className="grid grid-cols-6 gap-1.5">
+                          {WEEKDAY_OPTIONS.map((dayOpt) => {
+                            const active = recurrenceWeekdays.includes(dayOpt.value)
+                            return (
+                              <button
+                                key={dayOpt.value}
+                                type="button"
+                                onClick={() => handleToggleRecurrenceWeekday(dayOpt.value)}
+                                className={`py-2 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
+                                  active
+                                    ? "bg-foreground text-background border-foreground shadow-xs"
+                                    : "bg-background border-border/70 text-muted-foreground hover:border-border"
+                                }`}
+                              >
+                                {dayOpt.label}
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </div>
+
+                      {/* Prévia das Datas Geradas */}
+                      {selectedTime && recurrenceEndDate && (
+                        <div className="bg-muted/25 border border-border/50 rounded-xl p-3 space-y-2">
+                          <div className="flex items-center justify-between text-[11px] flex-wrap gap-2">
+                            <span className="font-bold text-foreground">
+                              Prévia: {recurrencePreview.availableDates.length} agendamento(s) será(ão) criado(s)
+                            </span>
+                            {recurrencePreview.skippedDates.length > 0 && (
+                              <span className="text-amber-400 font-semibold">
+                                {recurrencePreview.skippedDates.length} dia(s) pulado(s) por conflito
+                              </span>
+                            )}
+                          </div>
+
+                          {recurrencePreview.truncated && (
+                            <p className="text-[10px] text-amber-400">
+                              Limite máximo de {MAX_RECURRENCE_OCCURRENCES} ocorrências atingido. Datas posteriores foram ignoradas.
+                            </p>
+                          )}
+
+                          {recurrencePreview.allDates.length > 0 ? (
+                            <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto">
+                              {recurrencePreview.allDates.map((item) => {
+                                const parts = item.date.split("-")
+                                const labelDate = parts.length === 3 ? `${parts[2]}/${parts[1]}` : item.date
+                                return (
+                                  <span
+                                    key={item.date}
+                                    title={item.hasConflict ? `${labelDate} às ${selectedTime}: ${item.reason} (será pulado)` : `${labelDate} às ${selectedTime}: disponível`}
+                                    className={`px-2 py-0.5 rounded-lg text-[10px] font-mono font-bold border transition-colors ${
+                                      item.hasConflict
+                                        ? "bg-black border-red-500/30 text-red-400/70 line-through"
+                                        : "bg-black border-yellow-400/50 text-yellow-400 shadow-xs"
+                                    }`}
+                                  >
+                                    {labelDate}
+                                  </span>
+                                )
+                              })}
+                            </div>
+                          ) : (
+                            <p className="text-[11px] text-muted-foreground">
+                              Nenhuma data encontrada entre a data inicial e a data final para os dias selecionados.
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -1491,6 +1910,40 @@ export default function AgendaGrid() {
                 <div className="flex items-center gap-3 bg-green-500/10 border border-green-500/20 text-green-400 text-sm rounded-xl p-4 mt-3 animate-fade-in">
                   <CheckCircle2 size={18} className="shrink-0" />
                   <span>{successMsg}</span>
+                </div>
+              )}
+
+              {cancelScopePromptOpen && editingAppointmentId && (
+                <div className="bg-destructive/10 border border-destructive/30 rounded-xl p-4 space-y-3 animate-fade-in">
+                  <p className="text-xs font-bold text-destructive flex items-center gap-2">
+                    <Repeat size={14} /> Este agendamento faz parte de uma recorrência. Como deseja cancelar?
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      disabled={submitLoading}
+                      onClick={() => handleCancelAppointment("single")}
+                      className="py-2 px-3 bg-destructive text-white text-xs font-bold rounded-xl hover:opacity-90 transition-all cursor-pointer"
+                    >
+                      Cancelar apenas este
+                    </button>
+                    <button
+                      type="button"
+                      disabled={submitLoading}
+                      onClick={() => handleCancelAppointment("future")}
+                      className="py-2 px-3 bg-destructive/20 border border-destructive/40 text-destructive text-xs font-bold rounded-xl hover:bg-destructive/30 transition-all cursor-pointer"
+                    >
+                      Cancelar este e os próximos
+                    </button>
+                    <button
+                      type="button"
+                      disabled={submitLoading}
+                      onClick={() => setCancelScopePromptOpen(false)}
+                      className="py-2 px-3 bg-background border border-border text-foreground text-xs font-bold rounded-xl hover:bg-muted transition-all cursor-pointer"
+                    >
+                      Voltar
+                    </button>
+                  </div>
                 </div>
               )}
 
@@ -1532,7 +1985,7 @@ export default function AgendaGrid() {
                       ) : (
                         <button
                           type="button"
-                          onClick={handleCancelAppointment}
+                          onClick={() => handleCancelAppointment()}
                           disabled={submitLoading}
                           className="py-3 px-4 bg-destructive/10 border border-destructive/30 hover:bg-destructive/20 text-destructive text-xs uppercase tracking-wider font-bold rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5"
                         >
@@ -1549,6 +2002,7 @@ export default function AgendaGrid() {
                   onClick={() => {
                     setIsAppointmentModalOpen(false)
                     setEditingAppointmentId(null)
+                    setCancelScopePromptOpen(false)
                   }}
                   className="flex-1 py-3 bg-muted/40 hover:bg-muted/60 text-foreground text-xs uppercase tracking-wider font-bold rounded-xl transition-all cursor-pointer border border-border/40"
                 >
@@ -1563,6 +2017,8 @@ export default function AgendaGrid() {
                     <div className="w-5 h-5 border-2 border-background border-t-transparent rounded-full animate-spin mx-auto"></div>
                   ) : editingAppointmentId ? (
                     "SALVAR ALTERAÇÕES"
+                  ) : isRecurring ? (
+                    `CONFIRMAR RECORRÊNCIA (${recurrencePreview.availableDates.length})`
                   ) : (
                     "CONFIRMAR AGENDAMENTO"
                   )}

@@ -185,7 +185,7 @@ export default function CEventCalendar2({
     // Fallback caso os elementos do DOM ainda estejam montando
     const slotIndex = Math.max(0, Math.floor((currMins - startMins) / 30))
     const minInto = (currMins - startMins) % 30
-    const fallbackTop = 64 + slotIndex * 56 + (minInto / 30) * 56
+    const fallbackTop = 64 + slotIndex * 64 + (minInto / 30) * 64
     setLineTopPx(fallbackTop)
   }, [dayOfWeek, isToday, timeSlots, isStaff])
 
@@ -247,60 +247,153 @@ export default function CEventCalendar2({
     return () => clearInterval(interval)
   }, [isToday, isTimeInGridRange, lineTopPx])
 
-  // Obter o agendamento que começa ou cobre um slot para um determinado barbeiro
-  const getAppointmentForSlot = (barberId, slotTime) => {
-    const slotMinutes = timeToMinutes(slotTime)
+  // Pré-computar células da grade por barbeiro e slot para garantir alinhamento exato das colunas
+  // mesmo quando há múltiplos agendamentos simultâneos ou sobrepostos (ex: serviços "Livre")
+  const gridCellsByBarber = useMemo(() => {
+    const map = {}
+    if (!timeSlots || timeSlots.length === 0) return map
 
-    const matches = dayAppointments.filter((appt) => {
-      // Ignorar cancelamentos comuns de clientes, considerando apenas bloqueios reais de agenda
-      const isBloqueio = appt.client_id === "cust-bloqueio-sistema" || (appt.client_name && appt.client_name.toUpperCase() === "BLOQUEIO DE AGENDA")
-      if (appt.status === "cancelled" && (!appt.cancellation_reason || !isBloqueio)) return false
+    const gridStartMins = timeToMinutes(timeSlots[0])
 
-      // Encontrar objeto do barbeiro correspondente às colunas
-      const barbObj = barbers.find(
-        (b) => String(b.id) === String(barberId) || (b.user_id && String(b.user_id) === String(barberId))
-      )
-      const targetId = barbObj ? String(barbObj.id) : String(barberId)
-      const targetUserId = barbObj && barbObj.user_id ? String(barbObj.user_id) : null
-
+    const doesApptMatchBarber = (appt, barber) => {
+      const targetId = String(barber.id)
+      const targetUserId = barber.user_id ? String(barber.user_id) : null
       const apptBarberId = appt.barber_id ? String(appt.barber_id) : ""
 
-      // Match flexível por ID, User_ID ou Nome do Barbeiro (igualdade exata)
       const matchesId =
         apptBarberId === targetId ||
         (targetUserId && apptBarberId === targetUserId)
 
       const matchesName =
-        barbObj &&
-        barbObj.name &&
+        barber.name &&
         appt.barber_name &&
-        barbObj.name.trim().toLowerCase() === appt.barber_name.trim().toLowerCase()
+        barber.name.trim().toLowerCase() === appt.barber_name.trim().toLowerCase()
 
-      if (!matchesId && !matchesName) return false
+      return matchesId || matchesName
+    }
 
-      // Parse do horário do agendamento (normaliza T ou espaço)
-      const cleanTime = String(appt.appointment_time).trim().replace(" ", "T")
-      const timePart = cleanTime.split("T")[1] || ""
-      const apptTime = timePart.slice(0, 5)
-      const apptMinutes = timeToMinutes(apptTime)
+    barbers.forEach((barber) => {
+      const barberAppts = dayAppointments.filter((appt) => {
+        const isBloqueio =
+          appt.client_id === "cust-bloqueio-sistema" ||
+          (appt.client_name && appt.client_name.toUpperCase() === "BLOQUEIO DE AGENDA")
+        if (appt.status === "cancelled" && (!appt.cancellation_reason || !isBloqueio)) {
+          return false
+        }
+        return doesApptMatchBarber(appt, barber)
+      })
 
-      const duration =
-        appt.duration_minutes !== undefined && appt.duration_minutes !== null
-          ? Number(appt.duration_minutes)
-          : 30
-      const apptEndMinutes = apptMinutes + (duration === 0 ? 30 : duration)
+      // Agrupar agendamentos pelo índice do slot inicial
+      const byStartSlot = Array.from({ length: timeSlots.length }, () => [])
 
-      return slotMinutes >= apptMinutes && slotMinutes < apptEndMinutes
+      barberAppts.forEach((appt) => {
+        const cleanTime = String(appt.appointment_time || "").trim().replace(" ", "T")
+        const timePart = (cleanTime.split("T")[1] || "").slice(0, 5)
+        let startIdx = timeSlots.indexOf(timePart)
+
+        if (startIdx === -1 && timePart) {
+          const apptMins = timeToMinutes(timePart)
+          if (apptMins >= gridStartMins) {
+            const candidate = Math.floor((apptMins - gridStartMins) / 30)
+            if (candidate >= 0 && candidate < timeSlots.length) {
+              startIdx = candidate
+            }
+          }
+        }
+
+        if (startIdx === -1) return
+
+        const isCancelledBlock = appt.status === "cancelled"
+        const rawDuration =
+          appt.duration_minutes !== undefined && appt.duration_minutes !== null && Number(appt.duration_minutes) > 0
+            ? Number(appt.duration_minutes)
+            : 30
+        const slotCount = isCancelledBlock
+          ? 1
+          : Math.min(Math.max(1, Math.ceil(rawDuration / 30)), timeSlots.length - startIdx)
+
+        byStartSlot[startIdx].push({
+          appt,
+          startSlotIdx: startIdx,
+          slotTime: timeSlots[startIdx],
+          duration: rawDuration,
+          slotCount,
+          isCancelledBlock
+        })
+      })
+
+      const cells = new Array(timeSlots.length).fill(null)
+      let coveredUntil = -1
+
+      for (let i = 0; i < timeSlots.length; i++) {
+        if (i <= coveredUntil) {
+          cells[i] = { type: "spanned" }
+          continue
+        }
+
+        const slotEntries = byStartSlot[i]
+        if (!slotEntries || slotEntries.length === 0) {
+          cells[i] = { type: "empty" }
+          continue
+        }
+
+        const confirmedEntries = slotEntries.filter((e) => !e.isCancelledBlock)
+
+        if (confirmedEntries.length === 0) {
+          // Apenas bloqueios cancelados neste slot: mesclar slots consecutivos com o mesmo motivo
+          const firstBlock = slotEntries[0]
+          const reasonStr = firstBlock.appt.cancellation_reason || ""
+          let blockSlotCount = 1
+          for (let k = i + 1; k < timeSlots.length; k++) {
+            const nextConfirmed = byStartSlot[k].some((e) => !e.isCancelledBlock)
+            const nextBlock = byStartSlot[k].find(
+              (e) => e.isCancelledBlock && (e.appt.cancellation_reason || "") === reasonStr
+            )
+            if (!nextConfirmed && nextBlock) {
+              blockSlotCount++
+            } else {
+              break
+            }
+          }
+
+          coveredUntil = i + blockSlotCount - 1
+          cells[i] = {
+            type: "block",
+            rowSpan: blockSlotCount,
+            appt: firstBlock.appt,
+            slotTime: timeSlots[i],
+            totalBlockMinutes: blockSlotCount * 30
+          }
+          continue
+        }
+
+        // Agendamentos ativos: expandir rowSpan e coletar quaisquer agendamentos que comecem dentro do intervalo coberto
+        const collected = confirmedEntries.map((e) => ({ ...e, slotOffset: 0 }))
+        let endSlot = Math.max(...collected.map((e) => i + e.slotCount - 1))
+
+        for (let k = i + 1; k <= endSlot && k < timeSlots.length; k++) {
+          const overlapping = byStartSlot[k].filter((e) => !e.isCancelledBlock)
+          overlapping.forEach((e) => {
+            collected.push({ ...e, slotOffset: k - i })
+            endSlot = Math.max(endSlot, k + e.slotCount - 1)
+          })
+        }
+
+        const rowSpan = Math.min(endSlot - i + 1, timeSlots.length - i)
+        coveredUntil = i + rowSpan - 1
+
+        cells[i] = {
+          type: "appointments",
+          rowSpan,
+          items: collected
+        }
+      }
+
+      map[String(barber.id)] = cells
     })
 
-    if (matches.length === 0) return undefined
-
-    // Priorizar agendamentos confirmados em relação a bloqueios no mesmo horário
-    const confirmedMatch = matches.find((a) => a.status !== "cancelled")
-    if (confirmedMatch) return confirmedMatch
-
-    return matches[0]
-  }
+    return map
+  }, [barbers, dayAppointments, timeSlots])
 
   // Verificar se o slot já passou em relação ao horário atual
   const isSlotPast = (slotTime) => {
@@ -313,14 +406,6 @@ export default function CEventCalendar2({
     const extraMinutes = isStaff ? 30 : 0
     const slotExpiration = new Date(slotDateTime.getTime() + extraMinutes * 60000)
     return slotExpiration <= now
-  }
-
-  // Verificar se o slot é o início de um agendamento
-  const isStartOfAppointment = (appt, slotTime) => {
-    if (!appt || !appt.appointment_time) return false
-    const cleanTime = String(appt.appointment_time).trim().replace(" ", "T")
-    const timePart = cleanTime.split("T")[1] || ""
-    return timePart.slice(0, 5) === slotTime
   }
 
   return (
@@ -353,7 +438,7 @@ export default function CEventCalendar2({
             <p className="text-xs mt-1 text-muted-foreground/60">Não há horários de atendimento disponíveis para este dia (Domingo).</p>
           </div>
         ) : (
-          <table className={`w-full border-collapse text-left table-fixed ${isMobile || barbers.length === 1 ? "w-full min-w-0" : "min-w-[650px] md:min-w-0"}`}>
+          <table className={`w-full border-collapse text-left table-fixed ${isMobile || barbers.length === 1 ? "w-full min-w-0" : "min-w-[920px] xl:min-w-0"}`}>
           <colgroup>
             <col className={barbers.length === 1 ? "w-16 md:w-24" : "w-20 md:w-24"} />
             {barbers.map((barber, index) => (
@@ -419,10 +504,10 @@ export default function CEventCalendar2({
                 <tr
                   key={slotTime}
                   data-slot-time={slotTime}
-                  className={`h-14 transition-colors duration-150 ${isHourHeader ? "bg-background/20" : "bg-transparent"
+                  className={`h-16 transition-colors duration-150 ${isHourHeader ? "bg-background/20" : "bg-transparent"
                     }`}
                 >
-                  <td className="p-1 md:p-2.5 text-center border-r border-border/60 bg-black/20 text-[9pt] md:text-[10pt] font-mono font-bold text-muted-foreground sticky left-0 z-10 h-14">
+                  <td className="p-1 md:p-2.5 text-center border-r border-border/60 bg-black/20 text-[9pt] md:text-[10pt] font-mono font-bold text-muted-foreground sticky left-0 z-10 h-16">
                     <span
                       className={`inline-block px-1.5 md:px-2 py-0.5 rounded-lg border ${isHourHeader
                           ? "bg-primary/10 text-primary border-primary/30 font-black"
@@ -434,116 +519,22 @@ export default function CEventCalendar2({
                   </td>
 
                   {barbers.map((barber) => {
-                    const appt = getAppointmentForSlot(barber.id, slotTime)
+                    const cell = gridCellsByBarber[String(barber.id)]?.[slotIndex]
 
-                    if (appt) {
-                      const isCancelledBlock = appt.status === "cancelled"
+                    if (cell?.type === "spanned") {
+                      return null
+                    }
 
-                      if (isCancelledBlock) {
-                        // Verificar se o slot anterior é uma continuação do mesmo bloqueio
-                        if (slotIndex > 0) {
-                          const prevSlotTime = timeSlots[slotIndex - 1]
-                          const prevAppt = getAppointmentForSlot(barber.id, prevSlotTime)
-                          if (
-                            prevAppt &&
-                            prevAppt.status === "cancelled" &&
-                            (prevAppt.cancellation_reason || "") === (appt.cancellation_reason || "")
-                          ) {
-                            return null // Ocupado pelo rowSpan do primeiro slot da sequência
-                          }
-                        }
+                    if (cell?.type === "block") {
+                      const { rowSpan, appt, totalBlockMinutes } = cell
 
-                        // Calcular quantos slots consecutivos possuem o mesmo motivo de bloqueio
-                        let blockSlotCount = 1
-                        const reasonStr = appt.cancellation_reason || ""
-                        for (let k = slotIndex + 1; k < timeSlots.length; k++) {
-                          const nextSlot = timeSlots[k]
-                          const nextAppt = getAppointmentForSlot(barber.id, nextSlot)
-                          if (
-                            nextAppt &&
-                            nextAppt.status === "cancelled" &&
-                            (nextAppt.cancellation_reason || "") === reasonStr
-                          ) {
-                            blockSlotCount++
-                          } else {
-                            break
-                          }
-                        }
-
-                        const rowSpan = blockSlotCount
-                        const totalBlockMinutes = blockSlotCount * 30
-
-                        // Calcular horário final do bloqueio
-                        const [startH, startM] = slotTime.split(":").map(Number)
-                        const endMinTotal = startH * 60 + startM + totalBlockMinutes
-                        const endHStr = String(Math.floor(endMinTotal / 60)).padStart(2, "0")
-                        const endMStr = String(endMinTotal % 60).padStart(2, "0")
-                        const blockEndTimeStr = `${endHStr}:${endMStr}`
-
-                        const formattedDuration = formatDurationHM(totalBlockMinutes)
-
-                        return (
-                          <td
-                            key={`${barber.id}-${slotTime}`}
-                            rowSpan={rowSpan}
-                            className="p-1 border-r border-border/30 last:border-r-0 relative align-top"
-                          >
-                            <button
-                              type="button"
-                              onClick={() => onSelectAppointment && onSelectAppointment(appt)}
-                              style={{ minHeight: `${rowSpan * 56 - 8}px`, height: "100%" }}
-                              className="w-full p-2.5 rounded-xl shadow-md border border-dashed bg-rose-500/15 border-rose-500/40 text-rose-300 hover:scale-[1.01] active:scale-[0.99] transition-all text-left flex flex-col justify-between gap-1 cursor-pointer group overflow-hidden relative"
-                            >
-                              <div className="flex flex-col gap-0.5 w-full">
-                                <span className="font-extrabold text-[12pt] text-rose-300 truncate">
-                                  {appt.cancellation_reason ? appt.cancellation_reason : "HORÁRIO BLOQUEADO"}
-                                </span>
-                                <span className="text-[10pt] font-bold text-rose-300/80 truncate">
-                                  Bloqueio de Agenda
-                                </span>
-                              </div>
-                              <div className="flex items-center justify-between w-full mt-1 pt-1 border-t border-rose-500/30 text-[9.5pt] font-bold font-mono text-rose-300/90">
-                                <span>{slotTime} às {blockEndTimeStr}</span>
-                                <span className="bg-rose-500/25 text-rose-300 px-1.5 py-0.5 rounded text-[9pt] font-extrabold border border-rose-500/30">
-                                  {formattedDuration}
-                                </span>
-                              </div>
-                            </button>
-                          </td>
-                        )
-                      }
-
-                      // Agendamento normal de cliente
-                      const isStart = isStartOfAppointment(appt, slotTime)
-                      if (!isStart) {
-                        return null
-                      }
-
-                      const duration =
-                        appt.duration_minutes !== undefined && appt.duration_minutes !== null && appt.duration_minutes > 0
-                          ? Number(appt.duration_minutes)
-                          : 30
-                      const calculatedSlots = Math.max(1, Math.ceil(duration / 30))
-                      const remainingSlotsInDay = timeSlots.length - slotIndex
-                      const rowSpan = Math.min(calculatedSlots, remainingSlotsInDay)
-
-                      // Calcular horário final do agendamento
+                      // Calcular horário final do bloqueio
                       const [startH, startM] = slotTime.split(":").map(Number)
-                      const endMinTotal = startH * 60 + startM + duration
+                      const endMinTotal = startH * 60 + startM + totalBlockMinutes
                       const endHStr = String(Math.floor(endMinTotal / 60)).padStart(2, "0")
                       const endMStr = String(endMinTotal % 60).padStart(2, "0")
-                      const apptEndTimeStr = `${endHStr}:${endMStr}`
-                      const apptSale = sales.find(s => String(s.appointment_id) === String(appt.id))
-
-                      const matchedCaixa = caixaTransactions.find(c => 
-                        c.id === 'cx-srv-' + appt.id || 
-                        (c.appointment_id === appt.id && !c.id?.startsWith('caixa-sale-') && (c.id?.startsWith('cx-srv-') || c.category === 'Serviço' || c.category === 'Serviços'))
-                      )
-                      const hasCaixa = Boolean(appt.caixa_id || matchedCaixa)
-                      const currentPaymentMethod = appt.caixa_payment_method || (matchedCaixa ? matchedCaixa.payment_method : null)
-                      const currentCaixaAmount = appt.caixa_amount !== undefined && appt.caixa_amount !== null
-                        ? Number(appt.caixa_amount)
-                        : (matchedCaixa ? Number(matchedCaixa.amount) : (Number(appt.service_price || appt.price) || 0))
+                      const blockEndTimeStr = `${endHStr}:${endMStr}`
+                      const formattedDuration = formatDurationHM(totalBlockMinutes)
 
                       return (
                         <td
@@ -554,81 +545,151 @@ export default function CEventCalendar2({
                           <button
                             type="button"
                             onClick={() => onSelectAppointment && onSelectAppointment(appt)}
-                            style={{ minHeight: `${rowSpan * 56 - 8}px`, height: "100%" }}
-                            className="w-full p-2.5 rounded-xl shadow-md border bg-card text-foreground border-border hover:border-foreground/50 hover:scale-[1.01] active:scale-[0.99] transition-all text-left flex flex-col justify-between gap-1 cursor-pointer group overflow-hidden relative"
+                            style={{ minHeight: `${rowSpan * 64 - 8}px`, height: "100%" }}
+                            className="w-full p-2.5 rounded-xl shadow-md border border-dashed bg-rose-500/15 border-rose-500/40 text-rose-300 hover:scale-[1.01] active:scale-[0.99] transition-all text-left flex flex-col justify-between gap-1 cursor-pointer group overflow-hidden relative"
                           >
                             <div className="flex flex-col gap-0.5 w-full">
-                              <div className="flex items-center justify-between w-full gap-1">
-                                <span className="font-extrabold text-[12pt] truncate text-foreground">
-                                  {appt.client_name || "Cliente"}
-                                </span>
-                                <div className="flex items-center gap-1 shrink-0 flex-wrap justify-end">
-                                  {/* Botão de Lançamento de Caixa no Card (Exibido apenas se houver lançamento no caixa) */}
-                                  {hasCaixa && (
-                                    <button
-                                      type="button"
-                                      onClick={(e) => {
-                                        e.stopPropagation()
-                                        onOpenCaixaModal && onOpenCaixaModal(appt)
-                                      }}
-                                      className={`px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider flex items-center gap-1 transition-all shadow-xs cursor-pointer ${
-                                        currentPaymentMethod
-                                          ? "bg-foreground text-background border border-foreground hover:opacity-90"
-                                          : "bg-muted text-foreground border border-border hover:bg-muted/80"
-                                      }`}
-                                      title={
-                                        currentPaymentMethod
-                                          ? `Caixa: R$ ${currentCaixaAmount.toFixed(2)} (${currentPaymentMethod}) - Clique para editar forma de pagamento/valor`
-                                          : `Caixa: R$ ${currentCaixaAmount.toFixed(2)} - Clique para informar forma de pagamento/ajustar valor`
-                                      }
-                                    >
-                                      <ReceiptText size={11} />
-                                      <span>
-                                        {currentPaymentMethod
-                                          ? `${currentPaymentMethod === "CARTAO_CREDITO" ? "CRÉD" : currentPaymentMethod === "CARTAO_DEBITO" ? "DÉB" : currentPaymentMethod}: R$ ${currentCaixaAmount.toFixed(2)}`
-                                          : `R$ ${currentCaixaAmount.toFixed(2)}`}
-                                      </span>
-                                    </button>
-                                  )}
-
-                                  {/* Botão de Venda no Card */}
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation()
-                                      onOpenSaleModal && onOpenSaleModal(appt)
-                                    }}
-                                    className={`px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider flex items-center gap-1 transition-all shadow-xs cursor-pointer ${
-                                      apptSale
-                                        ? "bg-foreground text-background border border-foreground hover:opacity-90"
-                                        : "bg-muted text-foreground border border-border hover:bg-muted/80"
-                                    }`}
-                                    title={
-                                      apptSale
-                                        ? `Venda registrada: R$ ${Number(apptSale.total_amount || 0).toFixed(2)} (Clique para editar)`
-                                        : "Incluir Venda de Produtos"
-                                    }
-                                  >
-                                    <ShoppingBag size={11} />
-                                    <span>{apptSale ? `R$ ${Number(apptSale.total_amount || 0).toFixed(2)}` : "+ Venda"}</span>
-                                  </button>
-
-                                  {!hasCaixa && appt.price && (
-                                    <span className="bg-muted text-foreground px-1.5 py-0.5 rounded font-mono font-bold text-[10px]">
-                                      R$ {Number(appt.price).toFixed(2)}
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-                              <div className="text-[10pt] font-semibold text-muted-foreground truncate">
-                                {appt.service_name || appt.services?.name || "Serviço"}
-                              </div>
+                              <span className="font-extrabold text-[12pt] text-rose-300 truncate">
+                                {appt.cancellation_reason ? appt.cancellation_reason : "HORÁRIO BLOQUEADO"}
+                              </span>
+                              <span className="text-[10pt] font-bold text-rose-300/80 truncate">
+                                Bloqueio de Agenda
+                              </span>
                             </div>
-                            <div className="flex items-center justify-between w-full mt-1 pt-1 border-t border-border/40 text-[9.5pt] font-bold font-mono text-muted-foreground">
-                              <span>{slotTime} às {apptEndTimeStr}</span>
-                              <span className="bg-muted px-1.5 py-0.5 rounded text-[9pt] font-extrabold text-foreground">{formatDurationHM(duration)}</span>
+                            <div className="flex items-center justify-between w-full mt-1 pt-1 border-t border-rose-500/30 text-[9.5pt] font-bold font-mono text-rose-300/90">
+                              <span>{slotTime} às {blockEndTimeStr}</span>
+                              <span className="bg-rose-500/25 text-rose-300 px-1.5 py-0.5 rounded text-[9pt] font-extrabold border border-rose-500/30">
+                                {formattedDuration}
+                              </span>
                             </div>
                           </button>
+                        </td>
+                      )
+                    }
+
+                    if (cell?.type === "appointments") {
+                      const { rowSpan, items } = cell
+                      const hasMultiple = items.length > 1
+
+                      return (
+                        <td
+                          key={`${barber.id}-${slotTime}`}
+                          rowSpan={rowSpan}
+                          className="p-1 border-r border-border/30 last:border-r-0 relative align-top"
+                        >
+                          <div className={hasMultiple ? "flex flex-col gap-1.5 w-full" : "w-full h-full"}>
+                            {items.map((item) => {
+                              const { appt, slotTime: itemSlotTime, duration, slotCount } = item
+
+                              // Calcular horário final do agendamento
+                              const [startH, startM] = itemSlotTime.split(":").map(Number)
+                              const endMinTotal = startH * 60 + startM + duration
+                              const endHStr = String(Math.floor(endMinTotal / 60)).padStart(2, "0")
+                              const endMStr = String(endMinTotal % 60).padStart(2, "0")
+                              const apptEndTimeStr = `${endHStr}:${endMStr}`
+                              const apptSale = sales.find(s => String(s.appointment_id) === String(appt.id))
+
+                              const matchedCaixa = caixaTransactions.find(c =>
+                                c.id === 'cx-srv-' + appt.id ||
+                                (c.appointment_id === appt.id && !c.id?.startsWith('caixa-sale-') && (c.id?.startsWith('cx-srv-') || c.category === 'Serviço' || c.category === 'Serviços'))
+                              )
+                              const hasCaixa = Boolean(appt.caixa_id || matchedCaixa)
+                              const currentPaymentMethod = appt.caixa_payment_method || (matchedCaixa ? matchedCaixa.payment_method : null)
+                              const currentCaixaAmount = appt.caixa_amount !== undefined && appt.caixa_amount !== null
+                                ? Number(appt.caixa_amount)
+                                : (matchedCaixa ? Number(matchedCaixa.amount) : (Number(appt.service_price || appt.price) || 0))
+
+                              const cardMinHeightPx = hasMultiple ? Math.max(82, slotCount * 56 - 8) : slotCount * 64 - 8
+
+                              return (
+                                <div
+                                  key={appt.id}
+                                  className={hasMultiple ? "w-full" : "w-full h-full"}
+                                >
+                                  <button
+                                    type="button"
+                                    onClick={() => onSelectAppointment && onSelectAppointment(appt)}
+                                    style={{ minHeight: `${cardMinHeightPx}px`, height: hasMultiple ? "auto" : "100%" }}
+                                    className="w-full p-2.5 rounded-xl shadow-md border bg-card text-foreground border-border hover:border-foreground/50 hover:scale-[1.01] active:scale-[0.99] transition-all text-left flex flex-col justify-between gap-1 cursor-pointer group overflow-hidden relative"
+                                  >
+                                    <div className="flex flex-col gap-0.5 w-full">
+                                      <div className="flex items-center justify-between w-full gap-1">
+                                        <span className="font-extrabold text-[12pt] truncate text-foreground">
+                                          {appt.client_name || "Cliente"}
+                                        </span>
+                                        <div className="flex items-center gap-1 shrink-0 flex-wrap justify-end">
+                                          {/* Botão de Lançamento de Caixa no Card (Exibido apenas se houver lançamento no caixa) */}
+                                          {hasCaixa && (
+                                            <button
+                                              type="button"
+                                              onClick={(e) => {
+                                                e.stopPropagation()
+                                                onOpenCaixaModal && onOpenCaixaModal(appt)
+                                              }}
+                                              className={`px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider flex items-center gap-1 transition-all shadow-xs cursor-pointer ${
+                                                currentPaymentMethod
+                                                  ? "bg-foreground text-background border border-foreground hover:opacity-90"
+                                                  : "bg-muted text-foreground border border-border hover:bg-muted/80"
+                                              }`}
+                                              title={
+                                                currentPaymentMethod
+                                                  ? `Caixa: R$ ${currentCaixaAmount.toFixed(2)} (${currentPaymentMethod}) - Clique para editar forma de pagamento/valor`
+                                                  : `Caixa: R$ ${currentCaixaAmount.toFixed(2)} - Clique para informar forma de pagamento/ajustar valor`
+                                              }
+                                            >
+                                              <ReceiptText size={11} />
+                                              <span>
+                                                {currentPaymentMethod
+                                                  ? `${currentPaymentMethod === "CARTAO_CREDITO" ? "CRÉD" : currentPaymentMethod === "CARTAO_DEBITO" ? "DÉB" : currentPaymentMethod}: R$ ${currentCaixaAmount.toFixed(2)}`
+                                                  : `R$ ${currentCaixaAmount.toFixed(2)}`}
+                                              </span>
+                                            </button>
+                                          )}
+
+                                          {/* Botão de Venda no Card */}
+                                          <button
+                                            type="button"
+                                            onClick={(e) => {
+                                              e.stopPropagation()
+                                              onOpenSaleModal && onOpenSaleModal(appt)
+                                            }}
+                                            className={`px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider flex items-center gap-1 transition-all shadow-xs cursor-pointer ${
+                                              apptSale
+                                                ? "bg-foreground text-background border border-foreground hover:opacity-90"
+                                                : "bg-muted text-foreground border border-border hover:bg-muted/80"
+                                            }`}
+                                            title={
+                                              apptSale
+                                                ? `Venda registrada: R$ ${Number(apptSale.total_amount || 0).toFixed(2)} (Clique para editar)`
+                                                : "Incluir Venda de Produtos"
+                                            }
+                                          >
+                                            <ShoppingBag size={11} />
+                                            <span>{apptSale ? `R$ ${Number(apptSale.total_amount || 0).toFixed(2)}` : "+ Venda"}</span>
+                                          </button>
+
+                                          {!hasCaixa && appt.price && (
+                                            <span className="bg-muted text-foreground px-1.5 py-0.5 rounded font-mono font-bold text-[10px]">
+                                              R$ {Number(appt.price).toFixed(2)}
+                                            </span>
+                                          )}
+                                        </div>
+                                      </div>
+                                      <div className="text-[10pt] font-semibold text-muted-foreground truncate">
+                                        {appt.service_name || appt.services?.name || "Serviço"}
+                                      </div>
+                                    </div>
+                                    <div className="flex items-center justify-between w-full mt-1 pt-1 border-t border-border/40 text-[9.5pt] font-bold font-mono text-muted-foreground">
+                                      <span>{itemSlotTime} às {apptEndTimeStr}</span>
+                                      <span className="bg-muted px-1.5 py-0.5 rounded text-[9pt] font-extrabold text-foreground">
+                                        {appt.duration_minutes === 0 ? "Livre" : formatDurationHM(duration)}
+                                      </span>
+                                    </div>
+                                  </button>
+                                </div>
+                              )
+                            })}
+                          </div>
                         </td>
                       )
                     }
@@ -636,7 +697,7 @@ export default function CEventCalendar2({
                     return (
                       <td
                         key={`${barber.id}-${slotTime}`}
-                        className={`border-r border-border/30 last:border-r-0 relative h-14 align-top ${
+                        className={`border-r border-border/30 last:border-r-0 relative h-16 align-top ${
                           isPastSlot ? "p-0" : "p-1"
                         }`}
                       >

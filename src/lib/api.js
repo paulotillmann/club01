@@ -14,7 +14,7 @@ export const servicesApi = {
     return (data || []).map(s => ({
       ...s,
       price: Number(s.price) || 0,
-      duration_minutes: Number(s.duration_minutes ?? 30),
+      duration_minutes: s.duration_minutes !== null && s.duration_minutes !== undefined ? Number(s.duration_minutes) : 30,
       barber_ids: (s.barber_services || []).map(bs => bs.barber_id)
     }))
   },
@@ -28,18 +28,22 @@ export const servicesApi = {
     return (data || []).map(s => ({
       ...s,
       price: Number(s.price) || 0,
-      duration_minutes: Number(s.duration_minutes ?? 30),
+      duration_minutes: s.duration_minutes !== null && s.duration_minutes !== undefined ? Number(s.duration_minutes) : 30,
       barber_ids: (s.barber_services || []).map(bs => bs.barber_id)
     }))
   },
 
   async create(service) {
+    const duration = service.duration_minutes !== null && service.duration_minutes !== undefined
+      ? Number(service.duration_minutes)
+      : 30
+
     const { data, error } = await supabase
       .from("services")
       .insert({
         name: service.name,
         description: service.description || null,
-        duration_minutes: Number(service.duration_minutes) || 30,
+        duration_minutes: duration,
         price: Number(service.price) || 0,
         restricted_access: Boolean(service.restricted_access)
       })
@@ -61,18 +65,22 @@ export const servicesApi = {
     return {
       ...data,
       price: Number(data.price) || 0,
-      duration_minutes: Number(data.duration_minutes ?? 30),
+      duration_minutes: data.duration_minutes !== null && data.duration_minutes !== undefined ? Number(data.duration_minutes) : duration,
       barber_ids: targetBarberIds
     }
   },
 
   async update(id, service) {
+    const duration = service.duration_minutes !== null && service.duration_minutes !== undefined
+      ? Number(service.duration_minutes)
+      : 30
+
     const { data, error } = await supabase
       .from("services")
       .update({
         name: service.name,
         description: service.description || null,
-        duration_minutes: Number(service.duration_minutes) || 30,
+        duration_minutes: duration,
         price: Number(service.price) || 0,
         restricted_access: Boolean(service.restricted_access)
       })
@@ -80,7 +88,10 @@ export const servicesApi = {
       .select()
       .single()
     if (error) throw new Error(error.message)
-    return data
+    return {
+      ...data,
+      duration_minutes: data.duration_minutes !== null && data.duration_minutes !== undefined ? Number(data.duration_minutes) : duration
+    }
   },
 
   async delete(id) {
@@ -420,8 +431,8 @@ export const appointmentsApi = {
         ? multipleServices.reduce((sum, s) => sum + Number(s.price || 0), 0)
         : (Number(a.services?.price) || 0)
       const totalDuration = hasMultiple
-        ? multipleServices.reduce((sum, s) => sum + Number(s.duration_minutes || 30), 0)
-        : (Number(a.services?.duration_minutes) || 30)
+        ? multipleServices.reduce((sum, s) => sum + (s.duration_minutes !== null && s.duration_minutes !== undefined ? Number(s.duration_minutes) : 30), 0)
+        : (a.services?.duration_minutes !== null && a.services?.duration_minutes !== undefined ? Number(a.services.duration_minutes) : 30)
       const clientPhone = a.customers?.phone || ""
 
       return {
@@ -463,6 +474,28 @@ export const appointmentsApi = {
       p_barber_id: barberId,
       p_service_ids: serviceIds,
       p_appointment_time: appointmentTime
+    })
+    if (error) throw new Error(error.message)
+    return data
+  },
+
+  async bookRecurring({ name, phone, barberId, serviceIds, appointmentTimes }) {
+    const { data, error } = await supabase.rpc("book_recurring_appointments", {
+      p_name: name,
+      p_phone: phone,
+      p_barber_id: barberId,
+      p_service_ids: serviceIds,
+      p_appointment_times: appointmentTimes
+    })
+    if (error) throw new Error(error.message)
+    return data
+  },
+
+  async cancelRecurring({ appointmentId, scope = "single", reason = null }) {
+    const { data, error } = await supabase.rpc("cancel_recurring_appointments", {
+      p_appointment_id: appointmentId,
+      p_scope: scope,
+      p_reason: reason
     })
     if (error) throw new Error(error.message)
     return data
@@ -1159,4 +1192,114 @@ export const whatsappConfigApi = {
     }
   }
 }
+
+// ==============================================================================
+// 11. AGENTE DE IA WHATSAPP (EVOLUTION API + GEMINI)
+// ==============================================================================
+async function invokeWhatsappAiAdmin(body) {
+  const { data, error } = await supabase.functions.invoke("whatsapp-ai-webhook", {
+    body
+  })
+
+  if (error) {
+    let detailed = error.message || "Erro ao comunicar com o Agente de IA."
+    if (error.context && typeof error.context.json === "function") {
+      try {
+        const errJson = await error.context.json()
+        if (errJson?.error) detailed = errJson.error
+      } catch {
+        // mantém mensagem padrão
+      }
+    }
+    throw new Error(detailed)
+  }
+
+  if (data && data.success === false && data.error) {
+    throw new Error(data.error)
+  }
+
+  return data
+}
+
+export const whatsappAiApi = {
+  async getConfig() {
+    const { data, error } = await supabase
+      .from("whatsapp_ai_config")
+      .select("*")
+      .eq("id", "default")
+      .maybeSingle()
+    if (error) throw new Error(error.message)
+    return data
+  },
+
+  async updateConfig(fields) {
+    const payload = {
+      id: "default",
+      enabled: Boolean(fields.enabled),
+      cooldown_hours: Math.max(1, Math.min(168, Number(fields.cooldown_hours) || 12)),
+      booking_url: String(fields.booking_url || "https://club01.paulo-tech-nocode.workers.dev").trim(),
+      system_prompt: String(fields.system_prompt || "").trim(),
+      fallback_message: String(fields.fallback_message || "").trim(),
+      updated_at: new Date().toISOString()
+    }
+
+    const { data, error } = await supabase
+      .from("whatsapp_ai_config")
+      .upsert(payload, { onConflict: "id" })
+      .select()
+      .single()
+    if (error) throw new Error(error.message)
+    return data
+  },
+
+  async getLogs(statusFilter = "") {
+    let query = supabase
+      .from("whatsapp_ai_logs")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(100)
+
+    if (statusFilter) {
+      query = query.eq("status", statusFilter)
+    }
+
+    const { data, error } = await query
+    if (error) throw new Error(error.message)
+    return data || []
+  },
+
+  async getSessions() {
+    const { data, error } = await supabase
+      .from("whatsapp_ai_sessions")
+      .select("*")
+      .order("updated_at", { ascending: false })
+      .limit(50)
+    if (error) throw new Error(error.message)
+    return data || []
+  },
+
+  async getStatus() {
+    return invokeWhatsappAiAdmin({ admin_action: "status" })
+  },
+
+  async syncWebhook() {
+    return invokeWhatsappAiAdmin({ admin_action: "sync_webhook" })
+  },
+
+  async testAgent(sampleMessage, messageType = "text") {
+    return invokeWhatsappAiAdmin({
+      admin_action: "test_ai",
+      sample_message: sampleMessage,
+      message_type: messageType
+    })
+  },
+
+  async resetCooldown(phone) {
+    return invokeWhatsappAiAdmin({
+      admin_action: "reset_cooldown",
+      phone
+    })
+  }
+}
+
 
