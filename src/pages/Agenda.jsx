@@ -658,7 +658,7 @@ export default function Agenda() {
                   {/* Filtro por Foto dos Barbeiros */}
                   <div className="flex items-center gap-2 bg-background/30 p-1.5 rounded-2xl border border-border/50 shadow-xs">
                     {barbers
-                      .filter(b => b.is_active !== false || appointments.some(a => a.barber_id === b.id))
+                      .filter(b => b.active_desktop !== false)
                       .map((barb, index) => {
                       const isSelected = barberFilter === barb.id
                       const barberPhoto = barb.photo || (
@@ -755,6 +755,8 @@ export default function Agenda() {
                   const dayAppts = appointments.filter(appt => {
                     if (!appt.appointment_time) return false
                     if (!appt.appointment_time.startsWith(cellDateStr)) return false
+                    const apptBarber = barbers.find(b => b.id === appt.barber_id || b.name === appt.barber_name)
+                    if (apptBarber && apptBarber.active_desktop === false) return false
                     if (barberFilter) {
                       const barbObj = barbers.find(b => b.id === barberFilter)
                       const matchesId = appt.barber_id === barberFilter
@@ -922,6 +924,8 @@ export default function Agenda() {
                   const dayAppts = appointments.filter(appt => {
                     if (!appt.appointment_time) return false
                     if (!appt.appointment_time.startsWith(cellDateStr)) return false
+                    const apptBarber = barbers.find(b => b.id === appt.barber_id || b.name === appt.barber_name)
+                    if (apptBarber && apptBarber.active_desktop === false) return false
                     if (barberFilter) {
                       const barbObj = barbers.find(b => b.id === barberFilter)
                       const matchesId = appt.barber_id === barberFilter
@@ -1299,7 +1303,7 @@ export default function Agenda() {
                 <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block">Profissional / Barbeiro *</label>
                 <div className="flex flex-wrap gap-2.5">
                   {barbers
-                    .filter(b => b.is_active !== false || b.id === selectedBarber)
+                    .filter(b => b.active_desktop !== false)
                     .map((barb, index) => {
                     const isSelected = selectedBarber === barb.id
                     const barberPhoto = barb.photo || (

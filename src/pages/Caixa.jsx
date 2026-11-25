@@ -2,21 +2,21 @@ import React, { useState, useEffect, useMemo, useCallback, useRef } from "react"
 import { useNavigate } from "react-router-dom"
 import { useAuth } from "../context/AuthContext.jsx"
 import { caixaApi, barbersApi, productsApi, salesApi } from "../lib/api.js"
-import { 
-  Wallet, 
-  TrendingUp, 
-  TrendingDown, 
-  Search, 
-  Plus, 
-  Pencil, 
-  Trash2, 
-  RefreshCw, 
-  Calendar, 
-  CheckCircle2, 
-  AlertTriangle, 
-  Scissors, 
-  DollarSign, 
-  ArrowUpRight, 
+import {
+  Wallet,
+  TrendingUp,
+  TrendingDown,
+  Search,
+  Plus,
+  Pencil,
+  Trash2,
+  RefreshCw,
+  Calendar,
+  CheckCircle2,
+  AlertTriangle,
+  Scissors,
+  DollarSign,
+  ArrowUpRight,
   ArrowDownRight,
   X,
   ChevronLeft,
@@ -171,7 +171,7 @@ export default function Caixa() {
 
   const handleSaveSale = async (salePayload) => {
     if (salePayload.id) {
-      await salesApi.delete(salePayload.id).catch(() => {})
+      await salesApi.delete(salePayload.id).catch(() => { })
     }
 
     await salesApi.createAtomic({
@@ -653,9 +653,8 @@ export default function Caixa() {
             </div>
 
             {/* Card Saldo Líquido */}
-            <div className={`bg-muted/30 border rounded-2xl p-5 relative overflow-hidden group shadow-sm flex flex-col justify-between ${
-              filteredSummary.saldo >= 0 ? "border-border" : "border-destructive/40"
-            }`}>
+            <div className={`bg-muted/30 border rounded-2xl p-5 relative overflow-hidden group shadow-sm flex flex-col justify-between ${filteredSummary.saldo >= 0 ? "border-border" : "border-destructive/40"
+              }`}>
               <div>
                 <div className="flex items-center justify-between mb-3">
                   <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
@@ -665,9 +664,8 @@ export default function Caixa() {
                     <Wallet size={18} />
                   </div>
                 </div>
-                <div className={`font-display font-black text-2xl ${
-                  filteredSummary.saldo >= 0 ? "text-primary" : "text-rose-400"
-                }`}>
+                <div className={`font-display font-black text-2xl ${filteredSummary.saldo >= 0 ? "text-primary" : "text-rose-400"
+                  }`}>
                   {filteredSummary.saldo < 0
                     ? `- ${formatCurrency(Math.abs(filteredSummary.saldo))}`
                     : formatCurrency(filteredSummary.saldo)}
@@ -721,8 +719,8 @@ export default function Caixa() {
                         const bIndex = barbers.findIndex((b) => String(b.id) === String(selectedBarberFilter))
                         const photo = selectedBarber?.photo || (
                           bIndex === 0 ? "/assets/marcio-barber.jpeg" :
-                          bIndex === 1 ? "/assets/lucas-barber.jpeg" :
-                          "/assets/neto-barber.jpeg"
+                            bIndex === 1 ? "/assets/lucas-barber.jpeg" :
+                              "/assets/neto-barber.jpeg"
                         )
                         return (
                           <div className="w-6 h-6 rounded-full overflow-hidden border border-border shrink-0 bg-background flex items-center justify-center">
@@ -745,7 +743,7 @@ export default function Caixa() {
                 </button>
 
                 {isBarberDropdownOpen && (
-                  <div className="absolute right-0 lg:left-0 lg:right-auto top-full mt-1.5 w-64 bg-[#1c1c20] border border-border/80 rounded-2xl shadow-elevated z-50 overflow-hidden animate-scale-in py-1">
+                  <div className="absolute right-0 lg:left-0 lg:right-auto top-full mt-1.5 w-64 bg-card text-card-foreground border border-border/80 rounded-2xl shadow-elevated z-50 overflow-hidden animate-scale-in py-1">
                     <div className="px-3.5 py-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground border-b border-border/40">
                       Filtrar por Profissional
                     </div>
@@ -757,9 +755,8 @@ export default function Caixa() {
                         setSelectedBarberFilter("all")
                         setIsBarberDropdownOpen(false)
                       }}
-                      className={`w-full text-left px-3.5 py-2.5 hover:bg-muted/40 flex items-center justify-between transition-colors cursor-pointer text-xs ${
-                        selectedBarberFilter === "all" ? "bg-primary/10 font-bold text-primary" : "text-foreground"
-                      }`}
+                      className={`w-full text-left px-3.5 py-2.5 hover:bg-muted/40 flex items-center justify-between transition-colors cursor-pointer text-xs ${selectedBarberFilter === "all" ? "bg-primary/10 font-bold text-primary" : "text-foreground"
+                        }`}
                     >
                       <div className="flex items-center gap-2.5">
                         <div className="w-7 h-7 rounded-full bg-primary/20 border border-primary/40 flex items-center justify-center text-primary shrink-0">
@@ -772,40 +769,39 @@ export default function Caixa() {
 
                     {/* Lista de Barbeiros */}
                     {barbers
-                      .filter(b => b.is_active !== false || transactions.some(t => String(t.barber_id) === String(b.id)))
+                      .filter(b => (b.active_desktop !== false || b.active_mobile !== false) || transactions.some(t => String(t.barber_id) === String(b.id)))
                       .map((b, index) => {
-                      const isSelected = String(selectedBarberFilter) === String(b.id)
-                      const photo = b.photo || (
-                        index === 0 ? "/assets/marcio-barber.jpeg" :
-                        index === 1 ? "/assets/lucas-barber.jpeg" :
-                        "/assets/neto-barber.jpeg"
-                      )
-                      return (
-                        <button
-                          key={b.id}
-                          type="button"
-                          onClick={() => {
-                            setSelectedBarberFilter(b.id)
-                            setIsBarberDropdownOpen(false)
-                          }}
-                          className={`w-full text-left px-3.5 py-2.5 hover:bg-muted/40 flex items-center justify-between transition-colors cursor-pointer text-xs border-t border-border/20 ${
-                            isSelected ? "bg-primary/10 font-bold text-primary" : "text-foreground"
-                          }`}
-                        >
-                          <div className="flex items-center gap-2.5 truncate">
-                            <div className="w-7 h-7 rounded-full overflow-hidden border border-border shrink-0 bg-background flex items-center justify-center">
-                              {photo ? (
-                                <img src={photo} alt={b.name} className="w-full h-full object-cover" />
-                              ) : (
-                                <User size={14} className="text-muted-foreground" />
-                              )}
+                        const isSelected = String(selectedBarberFilter) === String(b.id)
+                        const photo = b.photo || (
+                          index === 0 ? "/assets/marcio-barber.jpeg" :
+                            index === 1 ? "/assets/lucas-barber.jpeg" :
+                              "/assets/neto-barber.jpeg"
+                        )
+                        return (
+                          <button
+                            key={b.id}
+                            type="button"
+                            onClick={() => {
+                              setSelectedBarberFilter(b.id)
+                              setIsBarberDropdownOpen(false)
+                            }}
+                            className={`w-full text-left px-3.5 py-2.5 hover:bg-muted/40 flex items-center justify-between transition-colors cursor-pointer text-xs border-t border-border/20 ${isSelected ? "bg-primary/10 font-bold text-primary" : "text-foreground"
+                              }`}
+                          >
+                            <div className="flex items-center gap-2.5 truncate">
+                              <div className="w-7 h-7 rounded-full overflow-hidden border border-border shrink-0 bg-background flex items-center justify-center">
+                                {photo ? (
+                                  <img src={photo} alt={b.name} className="w-full h-full object-cover" />
+                                ) : (
+                                  <User size={14} className="text-muted-foreground" />
+                                )}
+                              </div>
+                              <span className="truncate font-semibold">{b.name}</span>
                             </div>
-                            <span className="truncate font-semibold">{b.name}</span>
-                          </div>
-                          {isSelected && <Check size={16} className="text-primary font-bold shrink-0" />}
-                        </button>
-                      )
-                    })}
+                            {isSelected && <Check size={16} className="text-primary font-bold shrink-0" />}
+                          </button>
+                        )
+                      })}
                   </div>
                 )}
               </div>
@@ -814,25 +810,22 @@ export default function Caixa() {
               <div className="flex items-center bg-background border border-border rounded-xl p-1">
                 <button
                   onClick={() => setTypeFilter("all")}
-                  className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
-                    typeFilter === "all" ? "bg-primary text-background" : "text-muted-foreground hover:text-foreground"
-                  }`}
+                  className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${typeFilter === "all" ? "bg-primary text-background" : "text-muted-foreground hover:text-foreground"
+                    }`}
                 >
                   Todos
                 </button>
                 <button
                   onClick={() => setTypeFilter("receita")}
-                  className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
-                    typeFilter === "receita" ? "bg-green-500 text-black" : "text-muted-foreground hover:text-foreground"
-                  }`}
+                  className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${typeFilter === "receita" ? "bg-green-500 text-black" : "text-muted-foreground hover:text-foreground"
+                    }`}
                 >
                   Receitas
                 </button>
                 <button
                   onClick={() => setTypeFilter("despesa")}
-                  className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
-                    typeFilter === "despesa" ? "bg-rose-500 text-white" : "text-muted-foreground hover:text-foreground"
-                  }`}
+                  className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${typeFilter === "despesa" ? "bg-rose-500 text-white" : "text-muted-foreground hover:text-foreground"
+                    }`}
                 >
                   Despesas
                 </button>
@@ -846,11 +839,10 @@ export default function Caixa() {
                     setPickerYear(selectedYear)
                     setIsMonthPickerOpen((prev) => !prev)
                   }}
-                  className={`flex items-center justify-between gap-2.5 bg-background border text-xs font-bold py-2 px-3.5 rounded-xl transition-all cursor-pointer shadow-xs min-w-[170px] ${
-                    periodFilter === "month"
+                  className={`flex items-center justify-between gap-2.5 bg-background border text-xs font-bold py-2 px-3.5 rounded-xl transition-all cursor-pointer shadow-xs min-w-[170px] ${periodFilter === "month"
                       ? "border-primary text-foreground bg-primary/10"
                       : "border-border hover:border-primary/50 text-foreground"
-                  }`}
+                    }`}
                 >
                   <Calendar size={15} className="text-primary shrink-0" />
                   <div className="flex items-center gap-1 font-sans">
@@ -864,7 +856,7 @@ export default function Caixa() {
                 </button>
 
                 {isMonthPickerOpen && (
-                  <div className="absolute right-0 top-full mt-2 w-72 bg-[#1c1c20] border border-border/80 rounded-2xl shadow-2xl z-50 overflow-hidden animate-scale-in p-4">
+                  <div className="absolute right-0 top-full mt-2 w-72 bg-card text-card-foreground border border-border/80 rounded-2xl shadow-2xl z-50 overflow-hidden animate-scale-in p-4">
                     {/* Cabeçalho do Ano */}
                     <div className="flex items-center justify-between text-foreground mb-3 px-1">
                       <button
@@ -902,11 +894,10 @@ export default function Caixa() {
                               setPeriodFilter("month")
                               setIsMonthPickerOpen(false)
                             }}
-                            className={`py-2 px-3 text-xs font-bold rounded-xl text-center transition-all cursor-pointer ${
-                              isSelected
+                            className={`py-2 px-3 text-xs font-bold rounded-xl text-center transition-all cursor-pointer ${isSelected
                                 ? "bg-foreground text-background font-black shadow-sm scale-105"
                                 : "bg-muted/20 hover:bg-muted/50 text-foreground/80 hover:text-foreground border border-transparent hover:border-border/40"
-                            }`}
+                              }`}
                           >
                             {mName}
                           </button>
@@ -921,11 +912,10 @@ export default function Caixa() {
                           setPeriodFilter("all")
                           setIsMonthPickerOpen(false)
                         }}
-                        className={`w-full py-2 px-3 rounded-xl border border-dashed text-xs font-bold transition-all text-center cursor-pointer ${
-                          periodFilter === "all"
+                        className={`w-full py-2 px-3 rounded-xl border border-dashed text-xs font-bold transition-all text-center cursor-pointer ${periodFilter === "all"
                             ? "border-primary bg-primary/10 text-primary"
                             : "border-border/60 text-muted-foreground hover:text-foreground hover:border-border"
-                        }`}
+                          }`}
                       >
                         Todos os Períodos
                       </button>
@@ -938,33 +928,29 @@ export default function Caixa() {
               <div className="flex items-center bg-background border border-border rounded-xl p-1 gap-1">
                 <button
                   onClick={() => setPeriodFilter("today")}
-                  className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
-                    periodFilter === "today" ? "bg-primary text-background" : "text-muted-foreground hover:text-foreground"
-                  }`}
+                  className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${periodFilter === "today" ? "bg-primary text-background" : "text-muted-foreground hover:text-foreground"
+                    }`}
                 >
                   Hoje
                 </button>
                 <button
                   onClick={() => setPeriodFilter("week")}
-                  className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
-                    periodFilter === "week" ? "bg-primary text-background" : "text-muted-foreground hover:text-foreground"
-                  }`}
+                  className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${periodFilter === "week" ? "bg-primary text-background" : "text-muted-foreground hover:text-foreground"
+                    }`}
                 >
                   7 Dias
                 </button>
                 <button
                   onClick={() => setPeriodFilter("all")}
-                  className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
-                    periodFilter === "all" ? "bg-primary text-background" : "text-muted-foreground hover:text-foreground"
-                  }`}
+                  className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${periodFilter === "all" ? "bg-primary text-background" : "text-muted-foreground hover:text-foreground"
+                    }`}
                 >
                   Geral
                 </button>
                 <button
                   onClick={() => setPeriodFilter("custom")}
-                  className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
-                    periodFilter === "custom" ? "bg-primary text-background" : "text-muted-foreground hover:text-foreground"
-                  }`}
+                  className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${periodFilter === "custom" ? "bg-primary text-background" : "text-muted-foreground hover:text-foreground"
+                    }`}
                 >
                   Personalizado
                 </button>
@@ -1152,11 +1138,10 @@ export default function Caixa() {
                       <button
                         key={page}
                         onClick={() => setCurrentPage(page)}
-                        className={`w-8 h-8 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center ${
-                          currentPage === page
+                        className={`w-8 h-8 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center ${currentPage === page
                             ? "bg-primary text-background font-black shadow-sm"
                             : "bg-background border border-border/70 text-muted-foreground hover:text-foreground hover:border-border"
-                        }`}
+                          }`}
                       >
                         {page}
                       </button>
@@ -1181,7 +1166,7 @@ export default function Caixa() {
       {/* MODAL DE CONFIRMAÇÃO PERSONALIZADO */}
       {confirmModal.isOpen && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
-          <div className="bg-[#1c1c20]/95 backdrop-blur-xl w-full max-w-sm border border-destructive/30 rounded-2xl p-6 md:p-8 shadow-2xl relative animate-scale-in text-center">
+          <div className="bg-card/95 text-card-foreground backdrop-blur-xl w-full max-w-sm border border-destructive/30 rounded-2xl p-6 md:p-8 shadow-2xl relative animate-scale-in text-center">
             <div className="mx-auto w-12 h-12 bg-destructive/10 border border-destructive/25 text-destructive rounded-full flex items-center justify-center mb-4 animate-bounce">
               <AlertTriangle size={24} />
             </div>
@@ -1217,7 +1202,7 @@ export default function Caixa() {
       {/* MODAL DE CRIAÇÃO / EDIÇÃO DE TRANSAÇÕES DO CAIXA */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
-          <div className="bg-[#1c1c20]/95 backdrop-blur-xl w-full max-w-lg border border-primary/30 rounded-2xl p-6 md:p-8 shadow-2xl relative animate-scale-in">
+          <div className="bg-card/95 text-card-foreground backdrop-blur-xl w-full max-w-lg border border-primary/30 rounded-2xl p-6 md:p-8 shadow-2xl relative animate-scale-in">
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-xl font-bold font-display text-primary flex items-center gap-2">
                 {editingId ? <Pencil size={20} /> : <Plus size={20} />}
@@ -1248,11 +1233,10 @@ export default function Caixa() {
                   <button
                     type="button"
                     onClick={() => setFormType("receita")}
-                    className={`py-2.5 px-4 rounded-xl border text-xs font-bold uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-2 ${
-                      formType === "receita"
-                        ? "bg-green-500/20 border-green-500 text-green-400"
+                    className={`py-2.5 px-4 rounded-xl border text-xs font-bold uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-2 ${formType === "receita"
+                        ? "bg-emerald-500/15 border-emerald-500 text-emerald-700 dark:text-green-400"
                         : "bg-background border-border text-muted-foreground hover:border-border/80"
-                    }`}
+                      }`}
                   >
                     <ArrowUpRight size={16} /> Receita (+ Entrada)
                   </button>
@@ -1260,11 +1244,10 @@ export default function Caixa() {
                   <button
                     type="button"
                     onClick={() => setFormType("despesa")}
-                    className={`py-2.5 px-4 rounded-xl border text-xs font-bold uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-2 ${
-                      formType === "despesa"
-                        ? "bg-rose-500/20 border-rose-500 text-rose-400"
+                    className={`py-2.5 px-4 rounded-xl border text-xs font-bold uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-2 ${formType === "despesa"
+                        ? "bg-rose-500/15 border-rose-500 text-rose-700 dark:text-rose-400"
                         : "bg-background border-border text-muted-foreground hover:border-border/80"
-                    }`}
+                      }`}
                   >
                     <ArrowDownRight size={16} /> Despesa (- Saída)
                   </button>
@@ -1349,12 +1332,12 @@ export default function Caixa() {
                   >
                     <option value="">Nenhum / Geral da Barbearia</option>
                     {barbers
-                      .filter((b) => b.is_active !== false || b.id === formBarberId)
+                      .filter((b) => (b.active_desktop !== false || b.active_mobile !== false) || b.id === formBarberId)
                       .map((b) => (
-                      <option key={b.id} value={b.id}>
-                        {b.name}{b.is_active === false ? " (Inativo)" : ""}
-                      </option>
-                    ))}
+                        <option key={b.id} value={b.id}>
+                          {b.name}{b.active_desktop === false && b.active_mobile === false ? " (Inativo)" : ""}
+                        </option>
+                      ))}
                   </select>
                 </div>
               </div>

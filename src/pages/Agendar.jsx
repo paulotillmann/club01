@@ -77,7 +77,7 @@ export default function Agendar() {
         ])
 
         setServices(srvData || [])
-        setBarbers((barbData || []).filter(b => b.is_active !== false))
+        setBarbers((barbData || []).filter(b => b.active_mobile !== false))
         setAppointments(apptData || [])
 
         if (cfgData && cfgData.min_lead_time_minutes !== undefined) {

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
 import { useAuth } from "../context/AuthContext.jsx"
 import { barbersApi, usersApi, appointmentsApi } from "../lib/api.js"
-import { User, Plus, Pencil, Trash2, CheckCircle2, AlertTriangle, Upload } from "lucide-react"
+import { User, Plus, Pencil, Trash2, CheckCircle2, AlertTriangle, Upload, Monitor, Smartphone } from "lucide-react"
 import Sidebar from "../components/Sidebar.jsx"
 
 export default function Profissionais() {
@@ -12,7 +12,7 @@ export default function Profissionais() {
   const [barbers, setBarbers] = useState([])
   const [systemUsers, setSystemUsers] = useState([])
   const [loadingBarbers, setLoadingBarbers] = useState(true)
-  const [filterTab, setFilterTab] = useState("todos") // "todos" | "ativos" | "inativos"
+  const [filterTab, setFilterTab] = useState("todos") // "todos" | "ativos_desktop" | "ativos_mobile" | "inativos"
   const [isBarberModalOpen, setIsBarberModalOpen] = useState(false)
   const [editingBarberId, setEditingBarberId] = useState(null)
   const [barberName, setBarberName] = useState("")
@@ -24,7 +24,8 @@ export default function Profissionais() {
   const [barberServiceCommission, setBarberServiceCommission] = useState(0)
   const [barberProductCommission, setBarberProductCommission] = useState(0)
   const [barberUserId, setBarberUserId] = useState("")
-  const [barberIsActive, setBarberIsActive] = useState(true)
+  const [barberActiveDesktop, setBarberActiveDesktop] = useState(true)
+  const [barberActiveMobile, setBarberActiveMobile] = useState(true)
   const [barberSubmitting, setBarberSubmitting] = useState(false)
   const [barberError, setBarberError] = useState("")
   const [barberSuccess, setBarberSuccess] = useState("")
@@ -39,8 +40,12 @@ export default function Profissionais() {
   const [pendingWarningModal, setPendingWarningModal] = useState({
     isOpen: false,
     barber: null,
+    channel: null,
     pendingAppts: []
   })
+
+  const isDesktopActive = (b) => (b.active_desktop !== undefined ? b.active_desktop !== false : b.is_active !== false)
+  const isMobileActive = (b) => (b.active_mobile !== undefined ? b.active_mobile !== false : b.is_active !== false)
 
   useEffect(() => {
     if (!user) {
@@ -99,7 +104,8 @@ export default function Profissionais() {
     setBarberServiceCommission(0)
     setBarberProductCommission(0)
     setBarberUserId("")
-    setBarberIsActive(true)
+    setBarberActiveDesktop(true)
+    setBarberActiveMobile(true)
   }
 
   const handleEditBarberClick = (barb) => {
@@ -113,7 +119,8 @@ export default function Profissionais() {
     setBarberServiceCommission(barb.service_commission ?? 0)
     setBarberProductCommission(barb.product_commission ?? 0)
     setBarberUserId(barb.user_id || "")
-    setBarberIsActive(barb.is_active !== false)
+    setBarberActiveDesktop(isDesktopActive(barb))
+    setBarberActiveMobile(isMobileActive(barb))
     setIsBarberModalOpen(true)
   }
 
@@ -204,7 +211,9 @@ export default function Profissionais() {
       service_commission: Number(barberServiceCommission) || 0,
       product_commission: Number(barberProductCommission) || 0,
       user_id: barberUserId.trim() || null,
-      is_active: barberIsActive
+      active_desktop: barberActiveDesktop,
+      active_mobile: barberActiveMobile,
+      is_active: barberActiveDesktop || barberActiveMobile
     }
 
     try {
@@ -220,10 +229,15 @@ export default function Profissionais() {
         setBarberSuccess("")
       }, 5000)
 
+      const mergedFlags = {
+        active_desktop: barberActiveDesktop,
+        active_mobile: barberActiveMobile,
+        is_active: barberActiveDesktop || barberActiveMobile
+      }
       if (editingBarberId) {
-        setBarbers(prev => prev.map(b => b.id === editingBarberId ? { ...b, ...savedBarber, is_active: barberIsActive } : b))
+        setBarbers(prev => prev.map(b => b.id === editingBarberId ? { ...b, ...savedBarber, ...mergedFlags } : b))
       } else {
-        setBarbers(prev => [...prev, { ...savedBarber, is_active: barberIsActive }])
+        setBarbers(prev => [...prev, { ...savedBarber, ...mergedFlags }])
       }
 
       setIsBarberModalOpen(false)
@@ -235,8 +249,9 @@ export default function Profissionais() {
     }
   }
 
-  const handleToggleActiveBarber = async (barb) => {
-    const willDeactivate = barb.is_active !== false
+  const handleToggleChannelBarber = async (barb, channel) => {
+    const currentlyActive = channel === "mobile" ? isMobileActive(barb) : isDesktopActive(barb)
+    const willDeactivate = currentlyActive
 
     if (willDeactivate) {
       try {
@@ -245,6 +260,7 @@ export default function Profissionais() {
           setPendingWarningModal({
             isOpen: true,
             barber: barb,
+            channel,
             pendingAppts: pending
           })
           return
@@ -254,26 +270,27 @@ export default function Profissionais() {
       }
     }
 
-    await executeToggleActive(barb.id, !willDeactivate)
+    await executeToggleChannel(barb.id, channel, !willDeactivate)
   }
 
-  const executeToggleActive = async (barberId, newActiveStatus) => {
+  const executeToggleChannel = async (barberId, channel, newActiveStatus) => {
     setBarberError("")
+    const channelLabel = channel === "mobile" ? "Mobile (Agendamento Online)" : "Desktop (Agenda Interna)"
     try {
-      await barbersApi.toggleActive(barberId, newActiveStatus)
+      const updated = await barbersApi.toggleChannel(barberId, channel, newActiveStatus)
       setBarbers(prev =>
-        prev.map(b => (b.id === barberId ? { ...b, is_active: newActiveStatus } : b))
+        prev.map(b => (b.id === barberId ? { ...b, ...updated } : b))
       )
       setBarberSuccess(
         newActiveStatus
-          ? "Profissional ativado na agenda com sucesso!"
-          : "Profissional desativado da agenda com sucesso!"
+          ? `Atendimento via ${channelLabel} ativado com sucesso!`
+          : `Atendimento via ${channelLabel} desativado com sucesso!`
       )
       setTimeout(() => setBarberSuccess(""), 4000)
     } catch (err) {
       setBarberError(err.message || "Erro ao alterar status do profissional.")
     } finally {
-      setPendingWarningModal({ isOpen: false, barber: null, pendingAppts: [] })
+      setPendingWarningModal({ isOpen: false, barber: null, channel: null, pendingAppts: [] })
     }
   }
 
@@ -354,44 +371,41 @@ export default function Profissionais() {
               )}
             </div>
 
-            {/* Abas de Filtro: Todos, Ativos, Inativos */}
-            {!loadingBarbers && barbers.length > 0 && (
-              <div className="flex items-center gap-2 mb-6 border-b border-border/40 pb-4 flex-wrap">
-                <button
-                  type="button"
-                  onClick={() => setFilterTab("todos")}
-                  className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer flex items-center gap-2 ${
-                    filterTab === "todos"
-                      ? "bg-primary text-primary-foreground shadow-sm"
-                      : "bg-muted/40 hover:bg-muted text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  Todos <span className="text-[10px] opacity-80 font-mono">({barbers.length})</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setFilterTab("ativos")}
-                  className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer flex items-center gap-2 ${
-                    filterTab === "ativos"
-                      ? "bg-emerald-500 text-white shadow-sm"
-                      : "bg-muted/40 hover:bg-muted text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  Ativos na Agenda <span className="text-[10px] opacity-80 font-mono">({barbers.filter(b => b.is_active !== false).length})</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setFilterTab("inativos")}
-                  className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer flex items-center gap-2 ${
-                    filterTab === "inativos"
-                      ? "bg-zinc-600 text-white shadow-sm"
-                      : "bg-muted/40 hover:bg-muted text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  Inativos na Agenda <span className="text-[10px] opacity-80 font-mono">({barbers.filter(b => b.is_active === false).length})</span>
-                </button>
-              </div>
-            )}
+            {/* Abas de Filtro: Todos, Ativos Desktop, Ativos Mobile, Inativos */}
+            {!loadingBarbers && barbers.length > 0 && (() => {
+              const desktopCount = barbers.filter(isDesktopActive).length
+              const mobileCount = barbers.filter(isMobileActive).length
+              const inactiveCount = barbers.filter(b => !isDesktopActive(b) && !isMobileActive(b)).length
+              const tabs = [
+                { id: "todos", label: "Todos", count: barbers.length, activeClass: "bg-primary text-primary-foreground shadow-sm" },
+                { id: "ativos_desktop", label: "Ativos Desktop", count: desktopCount, activeClass: "bg-emerald-500 text-white shadow-sm", icon: Monitor },
+                { id: "ativos_mobile", label: "Ativos Mobile", count: mobileCount, activeClass: "bg-sky-500 text-white shadow-sm", icon: Smartphone },
+                { id: "inativos", label: "Inativos", count: inactiveCount, activeClass: "bg-zinc-600 text-white shadow-sm" }
+              ]
+              return (
+                <div className="flex items-center gap-2 mb-6 border-b border-border/40 pb-4 flex-wrap">
+                  {tabs.map((tab) => {
+                    const Icon = tab.icon
+                    return (
+                      <button
+                        key={tab.id}
+                        type="button"
+                        onClick={() => setFilterTab(tab.id)}
+                        className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${
+                          filterTab === tab.id
+                            ? tab.activeClass
+                            : "bg-muted/40 hover:bg-muted text-muted-foreground hover:text-foreground"
+                        }`}
+                      >
+                        {Icon && <Icon size={13} />}
+                        <span>{tab.label}</span>
+                        <span className="text-[10px] opacity-80 font-mono">({tab.count})</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              )
+            })()}
             
             {loadingBarbers ? (
               <div className="grid grid-cols-1 sm:grid-cols-[repeat(auto-fill,280px)] gap-5 justify-items-start">
@@ -416,68 +430,106 @@ export default function Profissionais() {
                   <p className="text-xs mt-1 text-muted-foreground/60">Clique em "Novo Profissional" para adicionar.</p>
                 )}
               </div>
-            ) : barbers.filter(b => {
-                if (filterTab === "ativos") return b.is_active !== false
-                if (filterTab === "inativos") return b.is_active === false
+            ) : (() => {
+              const filteredBarbers = barbers.filter(b => {
+                if (filterTab === "ativos_desktop") return isDesktopActive(b)
+                if (filterTab === "ativos_mobile") return isMobileActive(b)
+                if (filterTab === "inativos") return !isDesktopActive(b) && !isMobileActive(b)
                 return true
-              }).length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-12 text-center text-muted-foreground border border-dashed border-border rounded-xl">
-                <User size={36} className="stroke-1 mb-2 text-muted-foreground/30" />
-                <p className="text-xs font-medium">Nenhum profissional encontrado com o filtro "{filterTab}".</p>
-              </div>
-            ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-[repeat(auto-fill,280px)] gap-5 justify-items-start">
-              {barbers
-                .filter(b => {
-                  if (filterTab === "ativos") return b.is_active !== false
-                  if (filterTab === "inativos") return b.is_active === false
-                  return true
-                })
-                .map((barb, index) => {
-                const photo = barb.photo || (
-                  index === 0 ? "/assets/marcio-barber.jpeg" :
-                  index === 1 ? "/assets/lucas-barber.jpeg" :
-                  "/assets/neto-barber.jpeg"
-                )
-                const isActive = barb.is_active !== false
+              })
 
+              if (filteredBarbers.length === 0) {
+                const emptyLabel = {
+                  todos: "Todos",
+                  ativos_desktop: "Ativos Desktop",
+                  ativos_mobile: "Ativos Mobile",
+                  inativos: "Inativos"
+                }[filterTab] || filterTab
                 return (
-                  <div
-                    key={barb.id}
-                    className={`w-full max-w-[280px] bg-muted/20 border border-border/85 rounded-2xl p-5 shadow-md hover:border-primary/40 transition-all duration-300 text-center flex flex-col items-center group relative ${
-                      !isActive ? "opacity-75 grayscale-[20%]" : ""
-                    }`}
-                  >
-                    {/* Badge de Status e Quick Toggle */}
-                    <div className="w-full flex items-center justify-between gap-2 mb-3">
-                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider ${
-                        isActive
-                          ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30"
-                          : "bg-zinc-500/20 text-zinc-400 border border-zinc-500/40"
-                      }`}>
-                        <span className={`w-1.5 h-1.5 rounded-full ${isActive ? "bg-emerald-400 animate-pulse" : "bg-zinc-400"}`} />
-                        {isActive ? "Atende como Barbeiro" : "Inativo na Agenda"}
-                      </span>
+                  <div className="flex flex-col items-center justify-center py-12 text-center text-muted-foreground border border-dashed border-border rounded-xl">
+                    <User size={36} className="stroke-1 mb-2 text-muted-foreground/30" />
+                    <p className="text-xs font-medium">Nenhum profissional encontrado com o filtro "{emptyLabel}".</p>
+                  </div>
+                )
+              }
 
-                      {user.role === 'admin' && (
-                        <button
-                          type="button"
-                          role="switch"
-                          aria-checked={isActive}
-                          onClick={() => handleToggleActiveBarber(barb)}
-                          title={isActive ? "Clique para desativar da agenda" : "Clique para ativar na agenda"}
-                          className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                            isActive ? "bg-emerald-500" : "bg-zinc-600"
-                          }`}
-                        >
-                          <span
-                            className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                              isActive ? "translate-x-4" : "translate-x-0"
-                            }`}
-                          />
-                        </button>
-                      )}
-                    </div>
+              return (
+              <div className="grid grid-cols-1 sm:grid-cols-[repeat(auto-fill,280px)] gap-5 justify-items-start">
+                {filteredBarbers.map((barb, index) => {
+                  const photo = barb.photo || (
+                    index === 0 ? "/assets/marcio-barber.jpeg" :
+                    index === 1 ? "/assets/lucas-barber.jpeg" :
+                    "/assets/neto-barber.jpeg"
+                  )
+                  const desktopActive = isDesktopActive(barb)
+                  const mobileActive = isMobileActive(barb)
+                  const allInactive = !desktopActive && !mobileActive
+
+                  const channelRows = [
+                    {
+                      key: "desktop",
+                      label: "Desktop",
+                      active: desktopActive,
+                      icon: Monitor,
+                      activeSwitchClass: "bg-emerald-500",
+                      activeBadgeClass: "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30",
+                      dotClass: "bg-emerald-400"
+                    },
+                    {
+                      key: "mobile",
+                      label: "Mobile",
+                      active: mobileActive,
+                      icon: Smartphone,
+                      activeSwitchClass: "bg-sky-500",
+                      activeBadgeClass: "bg-sky-500/15 text-sky-400 border border-sky-500/30",
+                      dotClass: "bg-sky-400"
+                    }
+                  ]
+
+                  return (
+                    <div
+                      key={barb.id}
+                      className={`w-full max-w-[280px] bg-muted/20 border border-border/85 rounded-2xl p-5 shadow-md hover:border-primary/40 transition-all duration-300 text-center flex flex-col items-center group relative ${
+                        allInactive ? "opacity-75 grayscale-[20%]" : ""
+                      }`}
+                    >
+                      {/* Badges e Quick Toggles: Desktop e Mobile */}
+                      <div className="w-full space-y-1.5 mb-3.5 bg-background/40 border border-border/50 rounded-xl p-2">
+                        {channelRows.map((ch) => {
+                          const Icon = ch.icon
+                          return (
+                            <div key={ch.key} className="flex items-center justify-between gap-2">
+                              <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider ${
+                                ch.active
+                                  ? ch.activeBadgeClass
+                                  : "bg-zinc-500/20 text-zinc-400 border border-zinc-500/40"
+                              }`}>
+                                <Icon size={10} />
+                                <span>{ch.label}: {ch.active ? "Ativo" : "Inativo"}</span>
+                              </span>
+
+                              {user.role === 'admin' && (
+                                <button
+                                  type="button"
+                                  role="switch"
+                                  aria-checked={ch.active}
+                                  onClick={() => handleToggleChannelBarber(barb, ch.key)}
+                                  title={ch.active ? `Clique para desativar no ${ch.label}` : `Clique para ativar no ${ch.label}`}
+                                  className={`relative inline-flex h-4.5 w-8 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                                    ch.active ? ch.activeSwitchClass : "bg-zinc-600"
+                                  }`}
+                                >
+                                  <span
+                                    className={`pointer-events-none inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                                      ch.active ? "translate-x-3.5" : "translate-x-0"
+                                    }`}
+                                  />
+                                </button>
+                              )}
+                            </div>
+                          )
+                        })}
+                      </div>
 
                     <div className="relative w-28 h-28 rounded-full overflow-hidden border-2 border-border/80 group-hover:border-primary/50 transition-colors duration-300 shadow-md mb-4 bg-background">
                       <img src={photo} alt={barb.name} className="w-full h-full object-cover object-top scale-102 group-hover:scale-108 transition-transform duration-500" />
@@ -548,7 +600,8 @@ export default function Profissionais() {
                 )
               })}
             </div>
-            )}
+            )
+            })()}
           </div>
         </div>
       </div>
@@ -598,7 +651,7 @@ export default function Profissionais() {
             </div>
             
             <h3 className="text-lg font-bold font-display text-foreground mb-2">
-              Desativar {pendingWarningModal.barber?.name}?
+              Desativar {pendingWarningModal.channel === "mobile" ? "Mobile (Online)" : "Desktop (Agenda Interna)"} de {pendingWarningModal.barber?.name}?
             </h3>
             
             <p className="text-xs text-muted-foreground leading-relaxed mb-4">
@@ -622,20 +675,24 @@ export default function Profissionais() {
             </div>
 
             <p className="text-[11px] text-muted-foreground leading-relaxed mb-6">
-              Ao desativá-lo, <strong className="text-foreground">novos agendamentos não poderão ser realizados com ele</strong> na agenda ou online. Os agendamentos existentes acima serão preservados. Deseja prosseguir com a desativação?
+              {pendingWarningModal.channel === "mobile" ? (
+                <>Ao desativar no Mobile, <strong className="text-foreground">novos agendamentos online (/agendar) não poderão ser realizados com ele</strong>. Os agendamentos existentes acima serão preservados.</>
+              ) : (
+                <>Ao desativar no Desktop, <strong className="text-foreground">ele não ficará visível na agenda interna nem receberá novos agendamentos internos</strong>. Os agendamentos existentes acima serão preservados no banco.</>
+              )} Deseja prosseguir com a desativação?
             </p>
 
             <div className="flex gap-3">
               <button
                 type="button"
-                onClick={() => setPendingWarningModal({ isOpen: false, barber: null, pendingAppts: [] })}
+                onClick={() => setPendingWarningModal({ isOpen: false, barber: null, channel: null, pendingAppts: [] })}
                 className="flex-1 border border-border hover:bg-muted text-foreground font-bold h-11 rounded-xl text-xs transition-colors cursor-pointer"
               >
                 Cancelar
               </button>
               <button
                 type="button"
-                onClick={() => executeToggleActive(pendingWarningModal.barber.id, false)}
+                onClick={() => executeToggleChannel(pendingWarningModal.barber.id, pendingWarningModal.channel, false)}
                 className="flex-1 bg-amber-500 hover:bg-amber-600 text-black font-bold h-11 rounded-xl text-xs transition-all cursor-pointer shadow-lg hover:shadow-amber-500/20"
               >
                 Confirmar Desativação
@@ -648,7 +705,7 @@ export default function Profissionais() {
       {/* MODAL DE CRIAÇÃO / EDIÇÃO DE PROFISSIONAIS */}
       {isBarberModalOpen && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
-          <div className="bg-card/95 text-card-foreground backdrop-blur-xl w-full max-w-lg border border-primary/30 rounded-2xl p-6 md:p-8 shadow-2xl relative animate-scale-in">
+          <div className="bg-card/95 text-card-foreground backdrop-blur-xl w-full max-w-lg max-h-[90vh] overflow-y-auto border border-primary/30 rounded-2xl p-6 md:p-8 shadow-2xl relative animate-scale-in">
             <h3 className="text-xl font-bold font-display mb-6 text-primary flex items-center gap-2">
               {editingBarberId ? <Pencil size={20} /> : <Plus size={20} />}
               {editingBarberId ? "Editar Ficha de Profissional" : "Cadastrar Novo Profissional"}
@@ -764,44 +821,71 @@ export default function Profissionais() {
                   </select>
                 </div>
 
-                <div className="space-y-1 sm:col-span-2">
-                  <div className="bg-background/60 border border-border rounded-xl p-4 flex items-center justify-between gap-4">
-                    <div className="space-y-0.5">
-                      <div className="flex items-center gap-2">
-                        <label 
-                          className="text-xs font-bold text-foreground cursor-pointer select-none" 
-                          onClick={() => setBarberIsActive(!barberIsActive)}
+                <div className="sm:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {[
+                    {
+                      id: "desktop",
+                      title: "Atende via Desktop",
+                      subtitle: "Visível e disponível na agenda interna do sistema (recepção e equipe).",
+                      checked: barberActiveDesktop,
+                      toggle: () => setBarberActiveDesktop(prev => !prev),
+                      icon: Monitor,
+                      activeSwitchClass: "bg-emerald-500",
+                      activeBadgeClass: "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30"
+                    },
+                    {
+                      id: "mobile",
+                      title: "Atende via Mobile",
+                      subtitle: "Visível e disponível no agendamento online público para clientes.",
+                      checked: barberActiveMobile,
+                      toggle: () => setBarberActiveMobile(prev => !prev),
+                      icon: Smartphone,
+                      activeSwitchClass: "bg-sky-500",
+                      activeBadgeClass: "bg-sky-500/15 text-sky-400 border border-sky-500/30"
+                    }
+                  ].map((flag) => {
+                    const Icon = flag.icon
+                    return (
+                      <div key={flag.id} className="bg-background/60 border border-border rounded-xl p-3.5 flex items-start justify-between gap-3">
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <Icon size={14} className="text-muted-foreground shrink-0" />
+                            <label
+                              className="text-xs font-bold text-foreground cursor-pointer select-none"
+                              onClick={flag.toggle}
+                            >
+                              {flag.title}
+                            </label>
+                            <span className={`px-2 py-0.5 text-[9px] font-bold rounded-full uppercase tracking-wider ${
+                              flag.checked
+                                ? flag.activeBadgeClass
+                                : 'bg-zinc-500/20 text-zinc-400 border border-zinc-500/40'
+                            }`}>
+                              {flag.checked ? 'Ativo' : 'Inativo'}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-muted-foreground leading-normal">
+                            {flag.subtitle}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          role="switch"
+                          aria-checked={flag.checked}
+                          onClick={flag.toggle}
+                          className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none mt-0.5 ${
+                            flag.checked ? flag.activeSwitchClass : 'bg-muted border border-border'
+                          }`}
                         >
-                          Atende como Barbeiro / Ativo na Agenda
-                        </label>
-                        <span className={`px-2 py-0.5 text-[9px] font-bold rounded-full uppercase tracking-wider ${
-                          barberIsActive 
-                            ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30' 
-                            : 'bg-zinc-500/20 text-zinc-400 border border-zinc-500/40'
-                        }`}>
-                          {barberIsActive ? 'Ativo' : 'Inativo'}
-                        </span>
+                          <span
+                            className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                              flag.checked ? 'translate-x-5' : 'translate-x-0'
+                            }`}
+                          />
+                        </button>
                       </div>
-                      <p className="text-[11px] text-muted-foreground leading-normal">
-                        Quando ativado, o profissional fica visível para novos agendamentos online e na agenda do sistema (desktop e mobile).
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      role="switch"
-                      aria-checked={barberIsActive}
-                      onClick={() => setBarberIsActive(!barberIsActive)}
-                      className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                        barberIsActive ? 'bg-emerald-500' : 'bg-muted border border-border'
-                      }`}
-                    >
-                      <span
-                        className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                          barberIsActive ? 'translate-x-5' : 'translate-x-0'
-                        }`}
-                      />
-                    </button>
-                  </div>
+                    )
+                  })}
                 </div>
 
                 <div className="space-y-1 sm:col-span-2">

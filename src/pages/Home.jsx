@@ -94,7 +94,7 @@ export default function Home() {
       try {
         const data = await barbersApi.getPublic()
         if (Array.isArray(data)) {
-          setTeam(data.filter(b => b.is_active !== false))
+          setTeam(data.filter(b => b.active_desktop !== false || b.active_mobile !== false))
         }
       } catch (err) {
         console.error("Erro ao carregar equipe da API na Home:", err)

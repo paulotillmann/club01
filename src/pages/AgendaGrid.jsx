@@ -379,17 +379,16 @@ export default function AgendaGrid() {
         if (loadedBarbers) {
           setBarbers(loadedBarbers)
 
-          // Selecionar por padrão o barbeiro do usuário logado se existir, ou o primeiro barbeiro ativo
-          const activeList = loadedBarbers.filter(b => b.is_active !== false)
-          const candidates = activeList.length > 0 ? activeList : loadedBarbers
-          if (candidates.length > 0) {
-            const userBarber = candidates.find(
+          // Selecionar por padrão o barbeiro do usuário logado (se ativo no Desktop) ou o primeiro barbeiro ativo no Desktop
+          const activeList = loadedBarbers.filter(b => b.active_desktop !== false)
+          if (activeList.length > 0) {
+            const userBarber = activeList.find(
               (b) => String(b.id) === String(user?.id) || (b.user_id && String(b.user_id) === String(user?.id))
             )
             if (userBarber) {
               setSelectedMobileBarberId(String(userBarber.id))
             } else {
-              setSelectedMobileBarberId(String(candidates[0].id))
+              setSelectedMobileBarberId(String(activeList[0].id))
             }
           }
         }
@@ -1202,15 +1201,13 @@ export default function AgendaGrid() {
           </div>
         )}
 
-        {/* Barbeiros visíveis: ativos na agenda + inativos apenas se possuírem agendamento no dia */}
+        {/* Barbeiros visíveis: apenas profissionais com flag Desktop ativa */}
         {(() => {
-          const visibleBarbers = barbers.filter(
-            b => b.is_active !== false || appointments.some(a => a.barber_id === b.id && a.appointment_time?.startsWith(selectedDate))
-          )
+          const visibleBarbers = barbers.filter(b => b.active_desktop !== false)
 
           let displayedBarbers = visibleBarbers
           if (user?.role === 'barber') {
-            displayedBarbers = barbers.filter(
+            displayedBarbers = visibleBarbers.filter(
               b => String(b.id) === String(user.id) || String(b.user_id) === String(user.id)
             )
           } else if (isMobile) {
@@ -1312,7 +1309,7 @@ export default function AgendaGrid() {
                   className="w-full bg-background border border-border focus:border-rose-500 rounded-xl py-2.5 px-3 text-xs text-foreground focus:outline-none transition-all"
                 >
                   <option value="">Selecione um profissional</option>
-                  {barbers.filter(b => b.is_active !== false).map(b => (
+                  {barbers.filter(b => b.active_desktop !== false).map(b => (
                     <option key={b.id} value={b.id}>{b.name}</option>
                   ))}
                 </select>
@@ -1603,7 +1600,7 @@ export default function AgendaGrid() {
               <div className="space-y-2 mt-2">
                 <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block">Profissional / Barbeiro *</label>
                 <div className="flex flex-wrap gap-2.5">
-                  {barbers.filter(b => b.is_active !== false || b.id === selectedBarber).map((barb, index) => {
+                  {barbers.filter(b => b.active_desktop !== false).map((barb, index) => {
                     const isSelected = selectedBarber === barb.id
                     const barberPhoto = barb.photo || (
                       index === 0 ? "/assets/marcio-barber.jpeg" :

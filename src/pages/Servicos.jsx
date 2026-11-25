@@ -497,7 +497,7 @@ export default function Servicos() {
                 </label>
                 <div className="grid grid-cols-2 gap-2 mt-2 max-h-40 overflow-y-auto p-1 bg-background/25 border border-border/40 rounded-xl">
                   {barbers
-                    .filter(b => b.is_active !== false || serviceBarbers.includes(b.id))
+                    .filter(b => (b.active_desktop !== false || b.active_mobile !== false) || serviceBarbers.includes(b.id))
                     .map((barber) => {
                     const isSelected = serviceBarbers.includes(barber.id)
                     return (
@@ -520,7 +520,7 @@ export default function Servicos() {
                           }`}>
                           {isSelected && <Check size={12} strokeWidth={3} />}
                         </div>
-                        <span className="text-xs truncate">{barber.name}{barber.is_active === false ? " (Inativo)" : ""}</span>
+                        <span className="text-xs truncate">{barber.name}{barber.active_desktop === false && barber.active_mobile === false ? " (Inativo)" : ""}</span>
                       </button>
                     )
                   })}

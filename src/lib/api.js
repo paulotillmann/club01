@@ -108,8 +108,8 @@ export const barbersApi = {
   async getPublic() {
     const { data, error } = await supabase
       .from("barbers")
-      .select("id, name, photo, specialty, is_active")
-      .or("is_active.eq.true,is_active.is.null")
+      .select("id, name, photo, specialty, is_active, active_desktop, active_mobile")
+      .or("active_desktop.eq.true,active_mobile.eq.true")
       .order("name")
     if (error) throw new Error(error.message)
     return data || []
@@ -144,6 +144,13 @@ export const barbersApi = {
   },
 
   async create(barber, serviceIds = []) {
+    const activeDesktop = barber.active_desktop !== undefined
+      ? Boolean(barber.active_desktop)
+      : barber.is_active !== false
+    const activeMobile = barber.active_mobile !== undefined
+      ? Boolean(barber.active_mobile)
+      : barber.is_active !== false
+
     const { data, error } = await supabase
       .from("barbers")
       .insert({
@@ -156,7 +163,9 @@ export const barbersApi = {
         service_commission: Number(barber.service_commission) || 0,
         product_commission: Number(barber.product_commission) || 0,
         user_id: barber.user_id || null,
-        is_active: barber.is_active !== false
+        active_desktop: activeDesktop,
+        active_mobile: activeMobile,
+        is_active: activeDesktop || activeMobile
       })
       .select()
       .single()
@@ -189,7 +198,15 @@ export const barbersApi = {
       product_commission: Number(barber.product_commission) || 0,
       user_id: barber.user_id || null
     }
-    if (barber.is_active !== undefined) {
+    if (barber.active_desktop !== undefined) {
+      updateData.active_desktop = Boolean(barber.active_desktop)
+    }
+    if (barber.active_mobile !== undefined) {
+      updateData.active_mobile = Boolean(barber.active_mobile)
+    }
+    if (barber.active_desktop !== undefined || barber.active_mobile !== undefined) {
+      updateData.is_active = Boolean(updateData.active_desktop ?? true) || Boolean(updateData.active_mobile ?? true)
+    } else if (barber.is_active !== undefined) {
       updateData.is_active = Boolean(barber.is_active)
     }
 
@@ -211,10 +228,23 @@ export const barbersApi = {
     return data
   },
 
-  async toggleActive(id, isActive) {
+  async toggleChannel(id, channel, isActive) {
+    const column = channel === "mobile" ? "active_mobile" : "active_desktop"
     const { data, error } = await supabase
       .from("barbers")
-      .update({ is_active: Boolean(isActive) })
+      .update({ [column]: Boolean(isActive) })
+      .eq("id", id)
+      .select()
+      .single()
+    if (error) throw new Error(error.message)
+    return data
+  },
+
+  async toggleActive(id, isActive) {
+    const activeVal = Boolean(isActive)
+    const { data, error } = await supabase
+      .from("barbers")
+      .update({ active_desktop: activeVal, active_mobile: activeVal, is_active: activeVal })
       .eq("id", id)
       .select()
       .single()
